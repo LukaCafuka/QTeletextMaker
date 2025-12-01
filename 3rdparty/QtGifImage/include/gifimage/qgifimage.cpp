@@ -306,7 +306,7 @@ bool QGifImagePrivate::save(QIODevice *device) const {
 	}
 
 	GraphicsControlBlock gcbBlock;
-	gcbBlock.DisposalMode = 0;
+	gcbBlock.DisposalMode = 2;
 	gcbBlock.UserInputFlag = false;
 	gcbBlock.TransparentColor = getFrameTransparentColorIndex(frameInfo);
 
