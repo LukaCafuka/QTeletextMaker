@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020-2025 Gavin MacGregor
+ * Copyright (C) 2020-2026 Gavin MacGregor
  *
  * This file is part of QTeletextMaker.
  *
