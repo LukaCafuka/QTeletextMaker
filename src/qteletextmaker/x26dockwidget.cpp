@@ -1066,11 +1066,15 @@ void X26DockWidget::insertTriplet(int modeExt, int row)
 	} else
 		row = 0;
 
-	// Avoid reserved bits
+	// Avoid reserved bits or suggest sane defaults
 	switch (modeExt) {
 		case 0x07: // Address Row 0
 			newTriplet.setAddress(63); // set Address to notreserved
 			break;
+		case 0x15: // Define Active Object
+		case 0x16: // Define Adaptive Object
+		case 0x17: // Define Passive Object
+			newTriplet.setAddress(0x38); // Required at Levels 2.5 and 3.5
 		case 0x18: // DRCS mode
 			newTriplet.setData(0x70); // Normal DRCS at Levels 2.5 and 3.5
 			break;
