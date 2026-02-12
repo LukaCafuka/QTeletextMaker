@@ -346,17 +346,16 @@ void X26TripletList::updateInternalData()
 			case 0x2f: // G2 character
 				activePosition.setColumn(triplet->addressColumn());
 
-				if (activePosition.row() != triplet->m_activePositionRow || activePosition.column() != triplet->m_activePositionColumn)
-					triplet->m_activePosition1p5Differs = true;
+				triplet->m_activePosition1p5Differs = activePosition.row() != triplet->m_activePositionRow || activePosition.column() != triplet->m_activePositionColumn;
 				break;
 			default:
 				if (triplet->modeExt() >= 0x30 && triplet->modeExt() <= 0x3f) {
 					// G0 diacritical mark
 					activePosition.setColumn(triplet->addressColumn());
 
-					if (activePosition.row() != triplet->m_activePositionRow || activePosition.column() != triplet->m_activePositionColumn)
-						triplet->m_activePosition1p5Differs = true;
-				}
+					triplet->m_activePosition1p5Differs = activePosition.row() != triplet->m_activePositionRow || activePosition.column() != triplet->m_activePositionColumn;
+				} else
+					triplet->m_activePosition1p5Differs = false;
 		}
 
 		triplet->m_activePositionRow1p5 = activePosition.row();
