@@ -34,9 +34,9 @@ public:
 	TeletextFontBitmap();
 	~TeletextFontBitmap();
 
-	QImage *image() const { return s_fontImage; }
-	QPixmap charBitmap(int c, int s) const { return s_fontBitmap->copy((c-32)*12, s*10, 12, 10); }
-	QIcon charIcon(int c, int s) const { return QIcon(charBitmap(c, s)); }
+	QImage *image() const;
+	QPixmap charBitmap(int c, int s) const;
+	QIcon charIcon(int c, int s) const;
 
 private:
 	static int s_instances;
@@ -54,11 +54,11 @@ public:
 	TeletextPageRender();
 	~TeletextPageRender();
 
-	QImage* image(int i) const { return m_pageImage[i]; };
-	RenderMode renderMode() const { return m_renderMode; };
+	QImage* image(int i) const;
+	RenderMode renderMode() const;
 	void setDecoder(TeletextPageDecode *decoder);
 	void renderPage(bool force=false);
-	bool showControlCodes() const { return m_showControlCodes; };
+	bool showControlCodes() const;
 
 public slots:
 	void colourChanged(int index);

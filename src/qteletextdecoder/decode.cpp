@@ -48,9 +48,19 @@ void TeletextPageDecode::Invocation::clear()
 	m_fullRowCLUTMap.clear();
 }
 
+X26TripletList *TeletextPageDecode::Invocation::tripletList() const
+{
+	return m_tripletList;
+}
+
 void TeletextPageDecode::Invocation::setTripletList(X26TripletList *tripletList)
 {
 	m_tripletList = tripletList;
+}
+
+int TeletextPageDecode::Invocation::startTripletNumber() const
+{
+	return m_startTripletNumber;
 }
 
 void TeletextPageDecode::Invocation::setStartTripletNumber(int n)
@@ -58,9 +68,25 @@ void TeletextPageDecode::Invocation::setStartTripletNumber(int n)
 	m_startTripletNumber = n;
 }
 
+int TeletextPageDecode::Invocation::endTripletNumber() const
+{
+	return m_endTripletNumber;
+}
+
+
 void TeletextPageDecode::Invocation::setEndTripletNumber(int n)
 {
 	m_endTripletNumber = n;
+}
+
+int TeletextPageDecode::Invocation::originRow() const
+{
+	return m_originRow;
+}
+
+int TeletextPageDecode::Invocation::originColumn() const
+{
+	return m_originColumn;
 }
 
 void TeletextPageDecode::Invocation::setOrigin(int row, int column)
@@ -165,6 +191,41 @@ void TeletextPageDecode::Invocation::buildMap(int level)
 	}
 }
 
+QList<QPair<int, int>> TeletextPageDecode::Invocation::charPositions() const
+{
+	return m_characterMap.uniqueKeys();
+}
+
+QList<QPair<int, int>> TeletextPageDecode::Invocation::attrPositions() const
+{
+	return m_attributeMap.uniqueKeys();
+}
+
+QList<X26Triplet> TeletextPageDecode::Invocation::charactersMappedAt(int r, int c) const
+{
+	return m_characterMap.values(qMakePair(r, c));
+}
+
+QList<X26Triplet> TeletextPageDecode::Invocation::attributesMappedAt(int r, int c) const
+{
+	return m_attributeMap.values(qMakePair(r, c));
+}
+
+int TeletextPageDecode::Invocation::rightMostColumn(int r) const
+{
+	return m_rightMostColumn.value(r, -1);
+}
+
+int TeletextPageDecode::Invocation::fullScreenColour() const
+{
+	return m_fullScreenCLUT;
+}
+
+QList<X26Triplet> TeletextPageDecode::Invocation::fullRowColoursMappedAt(int r) const
+{
+	return m_fullRowCLUTMap.values(r);
+}
+
 
 int TeletextPageDecode::s_instances = 0;
 
@@ -217,9 +278,19 @@ TeletextPageDecode::~TeletextPageDecode()
 	s_instances--;
 }
 
+bool TeletextPageDecode::refresh(int r, int c) const
+{
+	return m_refresh[r][c];
+}
+
 void TeletextPageDecode::setRefresh(int r, int c, bool refresh)
 {
 	m_refresh[r][c] = refresh;
+}
+
+LevelOnePage *TeletextPageDecode::teletextPage() const
+{
+	return m_levelOnePage;
 }
 
 void TeletextPageDecode::setTeletextPage(LevelOnePage *newCurrentPage)
@@ -227,6 +298,11 @@ void TeletextPageDecode::setTeletextPage(LevelOnePage *newCurrentPage)
 	m_levelOnePage = newCurrentPage;
 	m_localEnhancements.setTripletList(m_levelOnePage->enhancements());
 	updateSidePanels();
+}
+
+QList<DRCSPage> *TeletextPageDecode::drcsPage(DRCSPageType pageType) const
+{
+	return m_drcsPage[pageType];
 }
 
 void TeletextPageDecode::setDRCSPage(DRCSPageType pageType, QList<DRCSPage> *pages)
@@ -251,6 +327,10 @@ void TeletextPageDecode::clearDRCSPage(DRCSPageType pageType)
 	setDRCSPage(pageType, nullptr);
 }
 
+int TeletextPageDecode::level() const {
+	return m_level;
+}
+
 void TeletextPageDecode::setLevel(int level)
 {
 	if (level == m_level)
@@ -264,6 +344,146 @@ void TeletextPageDecode::setLevel(int level)
 
 	updateSidePanels();
 	decodePage();
+}
+
+unsigned char TeletextPageDecode::cellCharacterCode(int r, int c) const
+{
+	return m_cell[r][c].character.code;
+}
+
+int TeletextPageDecode::cellCharacterSet(int r, int c) const
+{
+	return m_cell[r][c].character.set;
+}
+
+int TeletextPageDecode::cellCharacterDiacritical(int r, int c) const
+{
+	return m_cell[r][c].character.diacritical;
+}
+
+int TeletextPageDecode::cellG0CharacterSet(int r, int c) const
+{
+	return m_cell[r][c].g0Set;
+}
+
+int TeletextPageDecode::cellG2CharacterSet(int r, int c) const
+{
+	return m_cell[r][c].g2Set;
+}
+
+TeletextPageDecode::DRCSSource TeletextPageDecode::cellDrcsSource(int r, int c) const
+{
+	return m_cell[r][c].character.drcsSource;
+}
+
+int TeletextPageDecode::cellDrcsSubTable(int r, int c) const
+{
+	return m_cell[r][c].character.drcsSubTable;
+}
+
+int TeletextPageDecode::cellDrcsCharacter(int r, int c) const
+{
+	return m_cell[r][c].character.drcsChar;
+}
+
+int TeletextPageDecode::cellForegroundCLUT(int r, int c) const
+{
+	return m_cell[r][c].attribute.foregroundCLUT;
+}
+
+int TeletextPageDecode::cellBackgroundCLUT(int r, int c) const
+{
+	return m_cell[r][c].attribute.backgroundCLUT;
+}
+
+int TeletextPageDecode::cellFlashMode(int r, int c) const
+{
+	return m_cell[r][c].attribute.flash.mode;
+}
+
+int TeletextPageDecode::cellFlashRatePhase(int r, int c) const
+{
+	return m_cell[r][c].attribute.flash.ratePhase;
+}
+
+int TeletextPageDecode::cellFlash2HzPhaseNumber(int r, int c) const
+{
+	return m_cell[r][c].attribute.flash.phase2HzShown;
+}
+
+TeletextPageDecode::CharacterFragment TeletextPageDecode::cellCharacterFragment(int r, int c) const
+{
+	return m_cell[r][c].fragment;
+}
+
+bool TeletextPageDecode::cellBoxed(int r, int c) const
+{
+	return m_cell[r][c].attribute.display.boxingWindow;
+}
+
+bool TeletextPageDecode::cellConceal(int r, int c) const
+{
+	return m_cell[r][c].attribute.display.conceal;
+}
+
+bool TeletextPageDecode::cellUnderlined(int r, int c) const
+{
+	return cellCharacterSet(r, c) < 24 ? m_cell[r][c].attribute.display.underlineSeparated : false;
+}
+
+bool TeletextPageDecode::cellBold(int r, int c) const
+{
+	return m_cell[r][c].attribute.style.bold;
+}
+
+bool TeletextPageDecode::cellItalic(int r, int c) const
+{
+	return m_cell[r][c].attribute.style.italic;
+}
+
+bool TeletextPageDecode::cellProportional(int r, int c) const
+{
+	return m_cell[r][c].attribute.style.proportional;
+}
+
+bool TeletextPageDecode::level1MosaicAttr(int r, int c) const
+{
+	return m_cellLevel1MosaicAttr[r][c];
+}
+
+bool TeletextPageDecode::level1MosaicChar(int r, int c) const
+{
+	return m_cellLevel1MosaicChar[r][c];
+}
+
+int TeletextPageDecode::level1CharSet(int r, int c) const
+{
+	return m_cellLevel1CharSet[r][c];
+}
+
+TeletextPageDecode::RowHeight TeletextPageDecode::rowHeight(int r) const
+{
+	return m_rowHeight[r];
+}
+
+QColor TeletextPageDecode::fullScreenQColor() const
+{
+	return m_finalFullScreenQColor;
+}
+
+QColor TeletextPageDecode::fullRowQColor(int r) const
+{
+	return m_fullRowQColor[r];
+}
+
+int TeletextPageDecode::leftSidePanelColumns() const
+{
+	return m_leftSidePanelColumns;
+}
+
+int TeletextPageDecode::rightSidePanelColumns() const
+{
+	return m_rightSidePanelColumns;
 }
 
 QImage TeletextPageDecode::drcsImage(DRCSSource pageType, int subTable, int chr, bool flashPhOn)

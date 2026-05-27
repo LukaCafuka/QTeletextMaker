@@ -53,6 +53,21 @@ TeletextFontBitmap::~TeletextFontBitmap()
 	}
 }
 
+QImage *TeletextFontBitmap::image() const
+{
+	return s_fontImage;
+}
+
+QPixmap TeletextFontBitmap::charBitmap(int c, int s) const
+{
+	return s_fontBitmap->copy((c-32)*12, s*10, 12, 10);
+}
+
+QIcon TeletextFontBitmap::charIcon(int c, int s) const
+{
+	return QIcon(charBitmap(c, s));
+}
+
 
 TeletextPageRender::TeletextPageRender()
 {
@@ -75,6 +90,11 @@ TeletextPageRender::~TeletextPageRender()
 {
 	for (int i=0; i<6; i++)
 		delete m_pageImage[i];
+}
+
+QImage *TeletextPageRender::image(int i) const
+{
+	return m_pageImage[i];
 }
 
 void TeletextPageRender::setDecoder(TeletextPageDecode *decoder)
@@ -479,6 +499,11 @@ void TeletextPageRender::setReveal(bool reveal)
 				m_decoder->setRefresh(r, c, true);
 }
 
+TeletextPageRender::RenderMode TeletextPageRender::renderMode() const
+{
+	return m_renderMode;
+}
+
 void TeletextPageRender::setRenderMode(RenderMode renderMode)
 {
 	if (renderMode == m_renderMode)
@@ -491,6 +516,10 @@ void TeletextPageRender::setRenderMode(RenderMode renderMode)
 			m_decoder->setRefresh(r, c, true);
 }
 
+bool TeletextPageRender::showControlCodes() const
+{
+	return m_showControlCodes;
+}
 
 void TeletextPageRender::setShowControlCodes(bool showControlCodes)
 {

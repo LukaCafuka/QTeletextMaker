@@ -42,55 +42,55 @@ public:
 
 	TeletextPageDecode();
 	~TeletextPageDecode();
-	bool refresh(int r, int c) const { return m_refresh[r][c]; }
+	bool refresh(int r, int c) const;
 	void setRefresh(int r, int c, bool refresh);
-	int level() const { return m_level; }
+	int level() const;
 	void decodePage();
-	LevelOnePage *teletextPage() const { return m_levelOnePage; };
+	LevelOnePage *teletextPage() const;
 	void setTeletextPage(LevelOnePage *newCurrentPage);
-	QList<DRCSPage> *drcsPage(DRCSPageType pageType) const { return m_drcsPage[pageType]; };
+	QList<DRCSPage> *drcsPage(DRCSPageType pageType) const;
 	void setDRCSPage(DRCSPageType pageType, QList<DRCSPage> *pages);
 	void clearDRCSPage(DRCSPageType pageType);
 	void updateSidePanels();
 
-	unsigned char cellCharacterCode(int r, int c) const { return m_cell[r][c].character.code; };
-	int cellCharacterSet(int r, int c) const { return m_cell[r][c].character.set; };
-	int cellCharacterDiacritical(int r, int c) const { return m_cell[r][c].character.diacritical; };
-	int cellG0CharacterSet(int r, int c) const { return m_cell[r][c].g0Set; };
-	int cellG2CharacterSet(int r, int c) const { return m_cell[r][c].g2Set; };
+	unsigned char cellCharacterCode(int r, int c) const;
+	int cellCharacterSet(int r, int c) const;
+	int cellCharacterDiacritical(int r, int c) const;
+	int cellG0CharacterSet(int r, int c) const;
+	int cellG2CharacterSet(int r, int c) const;
 
-	DRCSSource cellDrcsSource(int r, int c) const { return m_cell[r][c].character.drcsSource; };
-	int cellDrcsSubTable(int r, int c) const { return m_cell[r][c].character.drcsSubTable; };
-	int cellDrcsCharacter(int r, int c) const { return m_cell[r][c].character.drcsChar; };
+	DRCSSource cellDrcsSource(int r, int c) const;
+	int cellDrcsSubTable(int r, int c) const;
+	int cellDrcsCharacter(int r, int c) const;
 
 	QImage drcsImage(DRCSSource pageType, int subTable, int chr, bool flashPhOn = true);
 
-	int cellForegroundCLUT(int r, int c) const { return m_cell[r][c].attribute.foregroundCLUT; };
-	int cellBackgroundCLUT(int r, int c) const { return m_cell[r][c].attribute.backgroundCLUT; };
+	int cellForegroundCLUT(int r, int c) const;
+	int cellBackgroundCLUT(int r, int c) const;
 	QColor cellForegroundQColor(int r, int c);
 	QColor cellBackgroundQColor(int r, int c);
 	QColor cellFlashForegroundQColor(int r, int c);
-	int cellFlashMode(int r, int c) const { return m_cell[r][c].attribute.flash.mode; };
-	int cellFlashRatePhase(int r, int c) const { return m_cell[r][c].attribute.flash.ratePhase; };
-	int cellFlash2HzPhaseNumber(int r, int c) const { return m_cell[r][c].attribute.flash.phase2HzShown; };
-	CharacterFragment cellCharacterFragment(int r, int c) const { return m_cell[r][c].fragment; };
-	bool cellBoxed(int r, int c) const { return m_cell[r][c].attribute.display.boxingWindow; };
-	bool cellConceal(int r, int c) const { return m_cell[r][c].attribute.display.conceal; };
-	bool cellUnderlined(int r, int c) const { return cellCharacterSet(r, c) < 24 ? m_cell[r][c].attribute.display.underlineSeparated : false; };
-	bool cellBold(int r, int c) const { return m_cell[r][c].attribute.style.bold; };
-	bool cellItalic(int r, int c) const { return m_cell[r][c].attribute.style.italic; };
-	bool cellProportional(int r, int c) const { return m_cell[r][c].attribute.style.proportional; };
+	int cellFlashMode(int r, int c) const;
+	int cellFlashRatePhase(int r, int c) const;
+	int cellFlash2HzPhaseNumber(int r, int c) const;
+	CharacterFragment cellCharacterFragment(int r, int c) const;
+	bool cellBoxed(int r, int c) const;
+	bool cellConceal(int r, int c) const;
+	bool cellUnderlined(int r, int c) const;
+	bool cellBold(int r, int c) const;
+	bool cellItalic(int r, int c) const;
+	bool cellProportional(int r, int c) const;
 
-	bool level1MosaicAttr(int r, int c) const { return m_cellLevel1MosaicAttr[r][c]; };
-	bool level1MosaicChar(int r, int c) const { return m_cellLevel1MosaicChar[r][c]; };
-	int level1CharSet(int r, int c) const { return m_cellLevel1CharSet[r][c]; };
+	bool level1MosaicAttr(int r, int c) const;
+	bool level1MosaicChar(int r, int c) const;
+	int level1CharSet(int r, int c) const;
 
-	RowHeight rowHeight(int r) const { return m_rowHeight[r]; };
+	RowHeight rowHeight(int r) const;
 
-	QColor fullScreenQColor() const { return m_finalFullScreenQColor; };
-	QColor fullRowQColor(int r) const { return m_fullRowQColor[r]; };
-	int leftSidePanelColumns() const { return m_leftSidePanelColumns; };
-	int rightSidePanelColumns() const { return m_rightSidePanelColumns; };
+	QColor fullScreenQColor() const;
+	QColor fullRowQColor(int r) const;
+	int leftSidePanelColumns() const;
+	int rightSidePanelColumns() const;
 
 public slots:
 	void setLevel(int level);
@@ -250,25 +250,25 @@ private:
 	public:
 		Invocation();
 
-		X26TripletList *tripletList() const { return m_tripletList; };
+		X26TripletList *tripletList() const;
 		void clear();
 		void setTripletList(X26TripletList *tripletList);
-		int startTripletNumber() const { return m_startTripletNumber; };
+		int startTripletNumber() const;
 		void setStartTripletNumber(int n);
-		int endTripletNumber() const { return m_endTripletNumber; };
+		int endTripletNumber() const;
 		void setEndTripletNumber(int n);
-		int originRow() const { return m_originRow; };
-		int originColumn() const { return m_originColumn; };
+		int originRow() const;
+		int originColumn() const;
 		void setOrigin(int row, int column);
 		void buildMap(int level);
 
-		QList<QPair<int, int>> charPositions() const { return m_characterMap.uniqueKeys(); };
-		QList<QPair<int, int>> attrPositions() const { return m_attributeMap.uniqueKeys(); };
-		QList<X26Triplet> charactersMappedAt(int r, int c) const { return m_characterMap.values(qMakePair(r, c)); };
-		QList<X26Triplet> attributesMappedAt(int r, int c) const { return m_attributeMap.values(qMakePair(r, c)); };
-		int rightMostColumn(int r) const { return m_rightMostColumn.value(r, -1); };
-		int fullScreenColour() const { return m_fullScreenCLUT; };
-		QList<X26Triplet> fullRowColoursMappedAt(int r) const { return m_fullRowCLUTMap.values(r); };
+		QList<QPair<int, int>> charPositions() const;
+		QList<QPair<int, int>> attrPositions() const;
+		QList<X26Triplet> charactersMappedAt(int r, int c) const;
+		QList<X26Triplet> attributesMappedAt(int r, int c) const;
+		int rightMostColumn(int r) const;
+		int fullScreenColour() const;
+		QList<X26Triplet> fullRowColoursMappedAt(int r) const;
 
 	private:
 		X26TripletList *m_tripletList;
