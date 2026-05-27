@@ -612,10 +612,8 @@ void TeletextPageDecode::updateSidePanels()
 	else
 		m_rightSidePanelColumns = 0;
 
-	if (m_leftSidePanelColumns != oldLeftSidePanelColumns || m_rightSidePanelColumns != oldRightSidePanelColumns) {
-		emit sidePanelsChanged();
+	if (m_leftSidePanelColumns != oldLeftSidePanelColumns || m_rightSidePanelColumns != oldRightSidePanelColumns)
 		decodePage();
-	}
 }
 
 void TeletextPageDecode::buildInvocationList(Invocation &invocation, int objectType)
@@ -1560,14 +1558,12 @@ inline void TeletextPageDecode::setFullScreenColour(int newColour)
 {
 	if (newColour == 8 || m_levelOnePage->controlBit(PageBase::C5Newsflash) || m_levelOnePage->controlBit(PageBase::C6Subtitle)) {
 		m_finalFullScreenQColor = QColor(0, 0, 0, 0);
-		emit fullScreenColourChanged(QColor(0, 0, 0, 0));
 		return;
 	}
 	QColor newFullScreenQColor = m_levelOnePage->CLUTtoQColor(newColour, m_level);
 	m_finalFullScreenColour = newColour;
 	if (m_finalFullScreenQColor != newFullScreenQColor) {
 		m_finalFullScreenQColor = newFullScreenQColor;
-		emit fullScreenColourChanged(m_finalFullScreenQColor);
 	}
 }
 
@@ -1577,7 +1573,6 @@ inline void TeletextPageDecode::setFullRowColour(int row, int newColour)
 
 	if (newColour == 8 || m_levelOnePage->controlBit(PageBase::C5Newsflash) || m_levelOnePage->controlBit(PageBase::C6Subtitle)) {
 		m_fullRowQColor[row] = QColor(0, 0, 0, 0);
-		emit fullRowColourChanged(row, QColor(0, 0, 0, 0));
 		return;
 	}
 	QColor newFullRowQColor = m_levelOnePage->CLUTtoQColor(newColour, m_level);
@@ -1587,6 +1582,5 @@ inline void TeletextPageDecode::setFullRowColour(int row, int newColour)
 				setRefresh(row, c, true);
 		}
 		m_fullRowQColor[row] = newFullRowQColor;
-		emit fullRowColourChanged(row, m_fullRowQColor[row]);
 	}
 }

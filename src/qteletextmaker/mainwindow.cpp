@@ -470,12 +470,12 @@ void MainWindow::init()
 	connect(m_textWidget->document(), &TeletextDocument::subPageSelected, this, &MainWindow::updatePageWidgets);
 	connect(m_textWidget->document(), &TeletextDocument::pageOptionsChanged, this, &MainWindow::updatePageWidgets);
 	connect(m_textWidget, &TeletextWidget::sizeChanged, this, &MainWindow::setSceneDimensions);
-	connect(m_textWidget->pageDecode(), &TeletextPageDecode::fullScreenColourChanged, m_textScene, &LevelOneScene::setFullScreenColour);
-	connect(m_textWidget->pageDecode(), &TeletextPageDecode::fullRowColourChanged, m_textScene, &LevelOneScene::setFullRowColour);
 	connect(m_textWidget, &TeletextWidget::insertKeyPressed, this, &MainWindow::toggleInsertMode);
-
 	connect(m_textScene, &LevelOneScene::mouseZoomIn, this, &MainWindow::zoomIn);
 	connect(m_textScene, &LevelOneScene::mouseZoomOut, this, &MainWindow::zoomOut);
+
+	connect(m_textWidget, &TeletextWidget::fullScreenColourChanged, m_textScene, &LevelOneScene::setFullScreenColour);
+	connect(m_textWidget, &TeletextWidget::fullRowColourChanged, m_textScene, &LevelOneScene::setFullRowColour);
 
 	connect(&m_fileWatcher, &QFileSystemWatcher::fileChanged, this, &MainWindow::updateWatchedFile);
 

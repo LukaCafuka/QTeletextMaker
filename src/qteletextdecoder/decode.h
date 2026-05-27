@@ -29,10 +29,8 @@
 #include "levelonepage.h"
 #include "pagebase.h"
 
-class TeletextPageDecode : public QObject
+class TeletextPageDecode
 {
-	Q_OBJECT
-
 public:
 	enum CharacterFragment { NormalSize, DoubleHeightTopHalf, DoubleHeightBottomHalf, DoubleWidthLeftHalf, DoubleWidthRightHalf, DoubleSizeTopLeftQuarter, DoubleSizeTopRightQuarter, DoubleSizeBottomLeftQuarter, DoubleSizeBottomRightQuarter };
 	enum DRCSPageType { NormalDRCSPage, GlobalDRCSPage };
@@ -45,6 +43,7 @@ public:
 	bool refresh(int r, int c) const;
 	void setRefresh(int r, int c, bool refresh);
 	int level() const;
+	void setLevel(int level);
 	void decodePage();
 	LevelOnePage *teletextPage() const;
 	void setTeletextPage(LevelOnePage *newCurrentPage);
@@ -91,14 +90,6 @@ public:
 	QColor fullRowQColor(int r) const;
 	int leftSidePanelColumns() const;
 	int rightSidePanelColumns() const;
-
-public slots:
-	void setLevel(int level);
-
-signals:
-	void fullScreenColourChanged(QColor newColour);
-	void fullRowColourChanged(int r, QColor newColour);
-	void sidePanelsChanged();
 
 protected:
 	inline void setFullScreenColour(int newColour);

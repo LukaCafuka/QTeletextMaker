@@ -62,6 +62,9 @@ signals:
 	void sizeChanged();
 	void insertKeyPressed();
 
+	void fullScreenColourChanged(QColor newColour);
+	void fullRowColourChanged(int r, QColor newColour);
+
 public slots:
 	void subPageSelected();
 	void refreshPage();
@@ -103,7 +106,7 @@ private:
 	LevelOnePage* m_levelOnePage;
 	bool m_insertMode, m_selectionInProgress;
 	QBasicTimer m_flashTimer;
-	int m_flashTiming, m_flashPhase;
+	int m_flashTiming, m_flashPhase, m_leftSidePanelColumns, m_rightSidePanelColumns;
 
 	void timerEvent(QTimerEvent *event) override;
 	QSet<QPair<int, int>> findMosaics();
