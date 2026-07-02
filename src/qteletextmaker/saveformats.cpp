@@ -379,35 +379,49 @@ int SaveT42Format::writePacket(QByteArray packet, int packetNumber, int designat
 	return(writeRawData(packet, packet.size()));
 }
 
+void SaveT42Format::writeAllPages()
+{
+	for (int p=0; p<m_document->numberOfPages(); p++) {
+		const TeletextPageEntry &pageEntry = m_document->pageEntry(p);
+
+		for (int s=0; s<pageEntry.subPages.size(); s++) {
+			const int subPageCode = m_document->subPageCodeAt(p, s);
+			writeSubPageStart(*pageEntry.subPages[s], pageEntry.pageNumber, subPageCode);
+			writeSubPageBody(*pageEntry.subPages[s]);
+			writeSubPageEnd(*pageEntry.subPages[s]);
+		}
+	}
+}
+
 void SaveT42Format::writeSubPageStart(const PageBase &subPage, int subPageNumber)
+{
+	const int subPageCode = subPageNumber != 0 ? subPageNumber
+		: m_document->subPageCodeAt(m_document->currentPageIndex(), m_document->currentSubPageIndex());
+	writeSubPageStart(subPage, m_document->pageNumber(), subPageCode);
+}
+
+void SaveT42Format::writeSubPageStart(const PageBase &subPage, int pageNumber, int subPageCode)
 {
 	QByteArray packet;
 
-	// Convert integer to Binary Coded Decimal
-	subPageNumber = QString::number(subPageNumber).toInt(nullptr, 16);
-
-	m_magazineNumber = (m_document->pageNumber() & 0xf00) >> 8;
+	m_magazineNumber = (pageNumber & 0xf00) >> 8;
 	if (m_magazineNumber == 8)
 		m_magazineNumber = 0;
 
-	// Retrieve and apply odd parity to header row if there's text there,
-	// otherwise create an initial packet of (odd parity valid) spaces
 	if (subPage.packetExists(0))
 		packet = format7BitPacket(subPage.packet(0));
 	else
 		packet.fill(0x20, 40);
 
-	// Byte 1 of MRAG - packet number 0
 	packet.prepend((char)0);
-	// Byte 0 of MRAG - magazine number, and packet number 0
 	packet.prepend(m_magazineNumber & 0x07);
 
-	packet[2] = m_document->pageNumber() & 0x00f;
-	packet[3] = (m_document->pageNumber() & 0x0f0) >> 4;
-	packet[4] = subPageNumber & 0xf;
-	packet[5] = ((subPageNumber >> 4) & 0x7) | (subPage.controlBit(PageBase::C4ErasePage) << 3);
-	packet[6] = ((subPageNumber >> 8) & 0xf);
-	packet[7] = ((subPageNumber >> 12) & 0x3) | (subPage.controlBit(PageBase::C5Newsflash) << 2) | (subPage.controlBit(PageBase::C6Subtitle) << 3);
+	packet[2] = pageNumber & 0x00f;
+	packet[3] = (pageNumber & 0x0f0) >> 4;
+	packet[4] = subPageCode & 0xf;
+	packet[5] = ((subPageCode >> 4) & 0x7) | (subPage.controlBit(PageBase::C4ErasePage) << 3);
+	packet[6] = ((subPageCode >> 8) & 0xf);
+	packet[7] = ((subPageCode >> 12) & 0x3) | (subPage.controlBit(PageBase::C5Newsflash) << 2) | (subPage.controlBit(PageBase::C6Subtitle) << 3);
 	packet[8] = subPage.controlBit(PageBase::C7SuppressHeader) | (subPage.controlBit(PageBase::C8Update) << 1) | (subPage.controlBit(PageBase::C9InterruptedSequence) << 2) | (subPage.controlBit(PageBase::C10InhibitDisplay) << 3);
 	packet[9] = subPage.controlBit(PageBase::C11SerialMagazine) | (subPage.controlBit(PageBase::C14NOS) << 1) | (subPage.controlBit(PageBase::C13NOS) << 2) | (subPage.controlBit(PageBase::C12NOS) << 3);
 
@@ -593,13 +607,9 @@ SaveFormats::~SaveFormats()
 
 SaveFormat *SaveFormats::findFormat(const QString &suffix) const
 {
-	// TTI is the only official save format at the moment...
-//	for (int i=0; i<s_nativeSize; i++)
-//		if (s_fileFormat[i]->extensions().contains(suffix, Qt::CaseInsensitive))
-//			return s_fileFormat[i];
-
-	if (s_fileFormat[0]->extensions().contains(suffix, Qt::CaseInsensitive))
-		return s_fileFormat[0];
+	for (int i=0; i<s_nativeSize; i++)
+		if (s_fileFormat[i]->extensions().contains(suffix, Qt::CaseInsensitive))
+			return s_fileFormat[i];
 
 	return nullptr;
 }

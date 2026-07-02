@@ -28,6 +28,7 @@
 #include <QStringList>
 #include <QVariant>
 
+#include "document.h"
 #include "pagebase.h"
 
 class LoadFormat
@@ -63,12 +64,16 @@ class LoadT42Format : public LoadFormat
 {
 public:
 	bool load(QFile *inFile, QList<PageBase> &subPages, QVariantHash *metadata = nullptr) override;
+	bool loadPageGroups(QFile *inFile, QList<TeletextPageLoadData> &pageGroups, QVariantHash *metadata = nullptr);
 
 	QString description() const override { return QString("t42 packet stream"); };
 	QStringList extensions() const override { return QStringList { "t42" }; };
 
 protected:
 	virtual bool readPacket();
+	int subPageCodeFromPacket0() const;
+	void applyPacket0Header(PageBase *loadingPage, int subPageCode);
+	bool loadBodyPacket(PageBase *loadingPage, int readPacketNumber, bool &errorEnhancements, bool &errorLinks, bool &errorPresentation);
 
 	QFile *m_inFile;
 	unsigned char m_inLine[42];

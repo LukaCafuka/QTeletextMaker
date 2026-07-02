@@ -36,8 +36,10 @@ protected:
 	void retrieveCharacters(int topRow, int leftColumn, const QByteArrayList &oldChars);
 
 	TeletextDocument *m_teletextDocument;
-	int m_subPageIndex, m_row, m_column;
+	int m_pageIndex, m_subPageIndex, m_row, m_column;
 	bool m_firstDo;
+
+	void selectCommandPage();
 };
 
 class TypeCharacterCommand : public LevelOneCommand

@@ -7,14 +7,19 @@ Features
 - Load and save pages in TTI format.
 - Rendering of pages in Levels 1, 1.5, 2.5 and 3.5 including Local Objects and side panels.
 - Rendering of DRCS characters imported from DRCS downloading pages.
-- Import and export of single pages in t42, EP1 and HTT formats.
-- Export PNG and animated GIF images of pages.
+- Load, edit and save multi-page teletext magazines in t42 and HTT formats; import and export single pages in EP1 format.
+- Export PNG and animated GIF images of pages; export all pages and subpages as high-quality PNG files to a folder.
 - Undo and redo of editing actions.
 - Interactive X/26 Local Enhancement Data triplet editor.
 - Editing of X/27/4 and X/27/5 compositional links to enhancement data pages.
 - Palette editor.
 - View pages in 4:3, 16:9 pillar-box and 16:9 stretch aspect ratios with configurable zoom level.
 - View pages in mix and attribute-less monochrome modes.
+
+### Multi-page navigation
+- **Page Up / Page Down** — previous / next subpage (carousel) within the current teletext page.
+- **Ctrl+Page Up / Ctrl+Page Down** — previous / next teletext page in a multi-page `.t42` file.
+- Use the **Pages** dock (Tools menu) to jump directly to any loaded page number. Multi-page `.t42` files keep the page order from the file; the first page in the file is shown at index 1.
 
 Although designed on and developed for Linux, the Qt libraries are cross platform so a Windows executable can be built. A Windows executable can be found within the "Releases" link, compiled on a Linux host using [MXE](https://github.com/mxe/mxe) based on [these instructions](https://web.archive.org/web/20230606021352/https://blog.8bitbuddhism.com/2018/08/22/cross-compiling-windows-applications-with-mxe/). After MXE is installed `make qt6-qtbase` should build and install the required dependencies to build QTeletextMaker.
 

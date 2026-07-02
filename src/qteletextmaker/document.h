@@ -43,6 +43,20 @@ private:
 	LevelOnePage *m_subPage;
 };
 
+struct TeletextPageLoadData
+{
+	int pageNumber = 0x199;
+	QList<PageBase> subPages;
+	QList<int> subPageCodes;
+};
+
+struct TeletextPageEntry
+{
+	int pageNumber = 0x199;
+	QList<LevelOnePage *> subPages;
+	QList<int> subPageCodes;
+};
+
 class TeletextDocument : public QObject
 {
 	Q_OBJECT
@@ -54,9 +68,18 @@ public:
 	bool isEmpty() const;
 	void clear();
 
-	int numberOfSubPages() const { return m_subPages.size(); }
-	LevelOnePage* subPage(int p) const { return m_subPages[p]; }
-	LevelOnePage* currentSubPage() const { return m_subPages[m_currentSubPageIndex]; }
+	int numberOfPages() const { return m_pages.size(); }
+	int currentPageIndex() const { return m_currentPageIndex; }
+	int pageNumberAt(int pageIndex) const { return m_pages.at(pageIndex).pageNumber; }
+	int subPageCodeAt(int pageIndex, int subPageIndex) const;
+	const TeletextPageEntry &pageEntry(int pageIndex) const { return m_pages.at(pageIndex); }
+	void selectPageIndex(int newPageIndex, bool forceRefresh=false);
+	void selectPageNext();
+	void selectPagePrevious();
+
+	int numberOfSubPages() const { return m_pages[m_currentPageIndex].subPages.size(); }
+	LevelOnePage* subPage(int p) const { return m_pages[m_currentPageIndex].subPages[p]; }
+	LevelOnePage* currentSubPage() const { return m_pages[m_currentPageIndex].subPages[m_currentSubPageIndex]; }
 	int currentSubPageIndex() const { return m_currentSubPageIndex; }
 	void selectSubPageIndex(int newSubPageIndex, bool refresh=false);
 	void selectSubPageNext();
@@ -66,8 +89,10 @@ public:
 	void deleteSubPageToRecycle(int subPageToRecycle);
 	void unDeleteSubPageFromRecycle(int subPage);
 	void loadFromList(QList<PageBase> const &subPageList);
+	void loadFromPageGroups(QList<TeletextPageLoadData> const &pageGroups);
 	void loadMetaData(QVariantHash const &metadata);
-	int pageNumber() const { return m_pageNumber; }
+	static QString formatPageNumber(int pageNumber);
+	int pageNumber() const { return m_pages[m_currentPageIndex].pageNumber; }
 	void setPageNumber(int pageNumber);
 	void setPageNumberFromString(QString pageNumberString);
 	QString description() const { return m_description; }
@@ -106,14 +131,19 @@ signals:
 	void pageOptionsChanged();
 	void aboutToChangeSubPage();
 	void subPageSelected();
+	void aboutToChangePage();
+	void pageSelected();
 	void contentsChanged();
 
 	void tripletCommandHighlight(int tripletNumber);
 
 private:
+	void freeAllPages();
+	void applyMagazineFlipToPage(TeletextPageEntry &pageEntry, int magazineFlip);
+
 	QString m_description;
-	int m_pageNumber, m_currentSubPageIndex;
-	QList<LevelOnePage *> m_subPages;
+	int m_currentPageIndex, m_currentSubPageIndex;
+	QList<TeletextPageEntry> m_pages;
 	QList<LevelOnePage *> m_recycleSubPages;
 	QUndoStack *m_undoStack;
 	int m_cursorRow, m_cursorColumn, m_selectionCornerRow, m_selectionCornerColumn;

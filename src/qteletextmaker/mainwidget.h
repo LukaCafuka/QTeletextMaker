@@ -57,6 +57,7 @@ public:
 	TeletextDocument* document() const { return m_teletextDocument; }
 	TeletextPageDecode *pageDecode() { return &m_pageDecode; }
 	TeletextPageRender *pageRender() { return &m_pageRender; }
+	QImage renderSubPageImage(LevelOnePage *subPage, int scaleFactor, int viewAspectRatio, bool applyViewAspectRatio, bool smoothUpscale) const;
 
 signals:
 	void sizeChanged();

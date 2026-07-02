@@ -40,6 +40,7 @@
 #include "pagecomposelinksdockwidget.h"
 #include "pageenhancementsdockwidget.h"
 #include "pageoptionsdockwidget.h"
+#include "pagelistdockwidget.h"
 #include "palettedockwidget.h"
 #include "saveformats.h"
 #include "x26dockwidget.h"
@@ -72,6 +73,7 @@ private slots:
 	void exportZXNet();
 	void exportEditTF();
 	void exportImage();
+	void exportAllPagesAsPng();
 	void exportM29();
 	void updateRecentFileActions();
 	void clearRecentFiles();
@@ -135,6 +137,7 @@ private:
 	int m_viewBorder, m_viewAspectRatio, m_viewZoom;
 	bool m_viewSmoothTransform;
 	PageOptionsDockWidget *m_pageOptionsDockWidget;
+	PageListDockWidget *m_pageListDockWidget;
 	PageEnhancementsDockWidget *m_pageEnhancementsDockWidget;
 	X26DockWidget *m_x26DockWidget;
 	PaletteDockWidget *m_paletteDockWidget;
@@ -151,7 +154,8 @@ private:
 	QAction *m_smoothTransformAction;
 	QAction *m_drcsSection[2], *m_drcsClear[2], *m_drcsSwap;
 
-	QLabel *m_subPageLabel, *m_cursorPositionLabel;
+	QLabel *m_pageLabel, *m_subPageLabel, *m_cursorPositionLabel;
+	QToolButton *m_previousPageButton, *m_nextPageButton;
 	QToolButton *m_previousSubPageButton, *m_nextSubPageButton;
 	QSlider *m_zoomSlider;
 	QPushButton *m_insertModePushButton;

@@ -63,6 +63,7 @@ public:
 public slots:
 	void colourChanged(int index);
 	void setReveal(bool reveal);
+	bool reveal() const { return m_reveal; }
 	void setRenderMode(RenderMode renderMode);
 	void setShowControlCodes(bool showControlCodes);
 

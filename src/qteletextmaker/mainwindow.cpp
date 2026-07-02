@@ -21,13 +21,16 @@
 #include <QApplication>
 #include <QClipboard>
 #include <QDesktopServices>
+#include <QDir>
 #include <QFileDialog>
+#include <QFileInfo>
 #include <QFileSystemWatcher>
 #include <QImage>
 #include <QList>
 #include <QMenuBar>
 #include <QMessageBox>
 #include <QPainter>
+#include <QProgressDialog>
 #include <QPushButton>
 #include <QRadioButton>
 #include <QRegularExpression>
@@ -175,10 +178,16 @@ void MainWindow::reload()
 			return;
 	}
 
+	int pageIndex = m_textWidget->document()->currentPageIndex();
 	int subPageIndex = m_textWidget->document()->currentSubPageIndex();
 
 	m_textWidget->document()->clear();
 	loadFile(m_curFile);
+
+	if (pageIndex >= m_textWidget->document()->numberOfPages())
+		pageIndex = m_textWidget->document()->numberOfPages()-1;
+
+	m_textWidget->document()->selectPageIndex(pageIndex, true);
 
 	if (subPageIndex >= m_textWidget->document()->numberOfSubPages())
 		subPageIndex = m_textWidget->document()->numberOfSubPages()-1;
@@ -284,16 +293,19 @@ void MainWindow::exportImage()
 		return;
 	}
 
-	QImage scaledImage[6];
-	// Really could simplify the suffix parameter here...
-	extractImages(scaledImage, suffix != "gif", suffix == "gif");
-
 	if (suffix == "png") {
-		if (scaledImage[0].save(exportFileName, "PNG"))
+		const int exportScale = qMax(2, 1 + m_viewZoom / 2);
+		const QImage image = m_textWidget->renderSubPageImage(m_textWidget->document()->currentSubPage(), exportScale, m_viewAspectRatio, true, m_viewSmoothTransform);
+		if (image.save(exportFileName, "PNG"))
 			m_exportImageFileName = exportFileName;
 		else
 			QMessageBox::warning(this, QApplication::applicationDisplayName(), tr("Cannot export image %1.").arg(QDir::toNativeSeparators(exportFileName)));
+		return;
 	}
+
+	QImage scaledImage[6];
+	// Really could simplify the suffix parameter here...
+	extractImages(scaledImage, suffix != "gif", suffix == "gif");
 
 	if (suffix == "gif") {
 		QGifImage gif(scaledImage[0].size());
@@ -345,6 +357,85 @@ void MainWindow::exportImage()
 	}
 }
 
+void MainWindow::exportAllPagesAsPng()
+{
+	TeletextDocument *document = m_textWidget->document();
+	if (document->numberOfPages() < 1)
+		return;
+
+	const QString exportDir = QFileDialog::getExistingDirectory(this, tr("Export all pages as PNG"), QString());
+	if (exportDir.isEmpty())
+		return;
+
+	QString baseName = "export";
+	if (!m_curFile.isEmpty())
+		baseName = QFileInfo(m_curFile).completeBaseName();
+
+	int totalExports = 0;
+	for (int p=0; p<document->numberOfPages(); p++)
+		totalExports += document->pageEntry(p).subPages.size();
+
+	QProgressDialog progress(tr("Exporting pages as PNG..."), tr("Cancel"), 0, totalExports, this);
+	progress.setWindowModality(Qt::WindowModal);
+	progress.setMinimumDuration(0);
+
+	const int savedPageIndex = document->currentPageIndex();
+	const int savedSubPageIndex = document->currentSubPageIndex();
+
+	setUpdatesEnabled(false);
+	m_textWidget->setUpdatesEnabled(false);
+	m_textView->setUpdatesEnabled(false);
+
+	int exported = 0;
+	int failed = 0;
+	int progressValue = 0;
+	bool cancelled = false;
+
+	for (int pageIndex=0; pageIndex < document->numberOfPages() && !cancelled; pageIndex++) {
+		const TeletextPageEntry &pageEntry = document->pageEntry(pageIndex);
+		const int pageNumber = pageEntry.pageNumber;
+		const bool multipleSubPages = pageEntry.subPages.size() > 1;
+
+		for (int subPageIndex=0; subPageIndex < pageEntry.subPages.size() && !cancelled; subPageIndex++) {
+			progress.setValue(progressValue++);
+			QApplication::processEvents();
+			if (progress.wasCanceled()) {
+				cancelled = true;
+				break;
+			}
+
+			const int subPageCode = subPageIndex < pageEntry.subPageCodes.size() ? pageEntry.subPageCodes.at(subPageIndex) : 0;
+			QString fileName = QString("%1_P%2").arg(baseName).arg(TeletextDocument::formatPageNumber(pageNumber));
+			if (multipleSubPages)
+				fileName.append(QString("_s%1").arg(subPageCode, 4, 16, QChar('0')).toUpper());
+			fileName.append(".png");
+
+			const int exportScale = qMax(2, 1 + m_viewZoom / 2);
+			const QImage image = m_textWidget->renderSubPageImage(pageEntry.subPages.at(subPageIndex), exportScale, m_viewAspectRatio, true, m_viewSmoothTransform);
+			if (image.save(QDir(exportDir).filePath(fileName), "PNG"))
+				exported++;
+			else
+				failed++;
+		}
+	}
+
+	document->selectPageIndex(savedPageIndex, true);
+	document->selectSubPageIndex(savedSubPageIndex, true);
+
+	m_textWidget->setUpdatesEnabled(true);
+	m_textView->setUpdatesEnabled(true);
+	setUpdatesEnabled(true);
+
+	progress.setValue(totalExports);
+
+	if (cancelled)
+		QMessageBox::information(this, QApplication::applicationDisplayName(), tr("Export cancelled.\n%1 PNG file(s) saved before cancel.").arg(exported));
+	else if (failed > 0)
+		QMessageBox::warning(this, QApplication::applicationDisplayName(), tr("Exported %1 PNG file(s).\n%2 file(s) failed to save.").arg(exported).arg(failed));
+	else
+		QMessageBox::information(this, QApplication::applicationDisplayName(), tr("Exported %1 PNG file(s) to %2.").arg(exported).arg(QDir::toNativeSeparators(exportDir)));
+}
+
 #ifndef QT_NO_CLIPBOARD
 void MainWindow::imageToClipboard()
 {
@@ -387,6 +478,8 @@ void MainWindow::init()
 
 	m_pageOptionsDockWidget = new PageOptionsDockWidget(m_textWidget);
 	addDockWidget(Qt::RightDockWidgetArea, m_pageOptionsDockWidget);
+	m_pageListDockWidget = new PageListDockWidget(m_textWidget);
+	addDockWidget(Qt::LeftDockWidgetArea, m_pageListDockWidget);
 	m_pageEnhancementsDockWidget = new PageEnhancementsDockWidget(m_textWidget);
 	addDockWidget(Qt::RightDockWidgetArea, m_pageEnhancementsDockWidget);
 	m_x26DockWidget = new X26DockWidget(m_textWidget);
@@ -450,6 +543,7 @@ void MainWindow::init()
 	if (windowState.isEmpty()) {
 		m_pageOptionsDockWidget->hide();
 		m_pageOptionsDockWidget->setFloating(true);
+		m_pageListDockWidget->hide();
 		m_pageEnhancementsDockWidget->hide();
 		m_pageEnhancementsDockWidget->setFloating(true);
 		m_x26DockWidget->hide();
@@ -467,7 +561,10 @@ void MainWindow::init()
 	connect(m_textWidget->document(), &TeletextDocument::selectionMoved, m_textScene, &LevelOneScene::updateSelection);
 	connect(m_textWidget->document()->undoStack(), &QUndoStack::cleanChanged, this, [=]() { setWindowModified(!m_textWidget->document()->undoStack()->isClean()); } );
 	connect(m_textWidget->document(), &TeletextDocument::aboutToChangeSubPage, m_x26DockWidget, &X26DockWidget::unloadX26List);
+	connect(m_textWidget->document(), &TeletextDocument::aboutToChangePage, m_x26DockWidget, &X26DockWidget::unloadX26List);
 	connect(m_textWidget->document(), &TeletextDocument::subPageSelected, this, &MainWindow::updatePageWidgets);
+	connect(m_textWidget->document(), &TeletextDocument::pageSelected, m_textWidget, &TeletextWidget::subPageSelected);
+	connect(m_textWidget->document(), &TeletextDocument::pageSelected, this, &MainWindow::updatePageWidgets);
 	connect(m_textWidget->document(), &TeletextDocument::pageOptionsChanged, this, &MainWindow::updatePageWidgets);
 	connect(m_textWidget, &TeletextWidget::sizeChanged, this, &MainWindow::setSceneDimensions);
 	connect(m_textWidget, &TeletextWidget::insertKeyPressed, this, &MainWindow::toggleInsertMode);
@@ -582,6 +679,10 @@ void MainWindow::createActions()
 	QAction *exportImageAct = fileMenu->addAction(tr("Export subpage as image..."));
 	exportImageAct->setStatusTip("Export an image of this subpage");
 	connect(exportImageAct, &QAction::triggered, this, &MainWindow::exportImage);
+
+	QAction *exportAllPagesPngAct = fileMenu->addAction(tr("Export all pages as PNG..."));
+	exportAllPagesPngAct->setStatusTip("Export every page and subpage as high-quality PNG files");
+	connect(exportAllPagesPngAct, &QAction::triggered, this, &MainWindow::exportAllPagesAsPng);
 
 	QAction *exportM29Act = fileMenu->addAction(tr("Export subpage X/28 as M/29..."));
 	exportM29Act->setStatusTip("Export this subpage's X/28 packets as a tti file with M/29 packets");
@@ -937,6 +1038,7 @@ void MainWindow::createActions()
 
 	QMenu *toolsMenu = menuBar()->addMenu(tr("&Tools"));
 
+	toolsMenu->addAction(m_pageListDockWidget->toggleViewAction());
 	toolsMenu->addAction(m_pageOptionsDockWidget->toggleViewAction());
 	toolsMenu->addAction(m_x26DockWidget->toggleViewAction());
 	toolsMenu->addAction(m_pageEnhancementsDockWidget->toggleViewAction());
@@ -1186,27 +1288,46 @@ void MainWindow::toggleInsertMode()
 
 void MainWindow::createStatusBar()
 {
+	m_previousPageButton = new QToolButton;
+	m_previousPageButton->setAutoRaise(true);
+	m_previousPageButton->setArrowType(Qt::LeftArrow);
+	statusBar()->insertWidget(0, m_previousPageButton);
+	connect(m_previousPageButton, &QToolButton::clicked, m_textWidget->document(), &TeletextDocument::selectPagePrevious);
+
+	m_pageLabel = new QLabel("P199 (1/1)");
+	statusBar()->insertWidget(1, m_pageLabel);
+
+	m_nextPageButton = new QToolButton;
+	m_nextPageButton->setAutoRaise(true);
+	m_nextPageButton->setArrowType(Qt::RightArrow);
+	statusBar()->insertWidget(2, m_nextPageButton);
+	connect(m_nextPageButton, &QToolButton::clicked, m_textWidget->document(), &TeletextDocument::selectPageNext);
+
 	m_previousSubPageButton = new QToolButton;
 	m_previousSubPageButton->setAutoRaise(true);
 	m_previousSubPageButton->setArrowType(Qt::LeftArrow);
-	statusBar()->insertWidget(0, m_previousSubPageButton);
+	statusBar()->insertWidget(3, m_previousSubPageButton);
 	connect(m_previousSubPageButton, &QToolButton::clicked, m_textWidget->document(), &TeletextDocument::selectSubPagePrevious);
 
 	m_subPageLabel = new QLabel("1/1");
-	statusBar()->insertWidget(1, m_subPageLabel);
+	statusBar()->insertWidget(4, m_subPageLabel);
 
 	m_nextSubPageButton = new QToolButton;
+	m_previousPageButton->setMinimumSize(m_subPageLabel->height(), m_subPageLabel->height());
+	m_previousPageButton->setMaximumSize(m_subPageLabel->height(), m_subPageLabel->height());
+	m_nextPageButton->setMinimumSize(m_subPageLabel->height(), m_subPageLabel->height());
+	m_nextPageButton->setMaximumSize(m_subPageLabel->height(), m_subPageLabel->height());
 	m_previousSubPageButton->setMinimumSize(m_subPageLabel->height(), m_subPageLabel->height());
 	m_previousSubPageButton->setMaximumSize(m_subPageLabel->height(), m_subPageLabel->height());
 	m_nextSubPageButton->setMinimumSize(m_subPageLabel->height(), m_subPageLabel->height());
 	m_nextSubPageButton->setMaximumSize(m_subPageLabel->height(), m_subPageLabel->height());
 	m_nextSubPageButton->setAutoRaise(true);
 	m_nextSubPageButton->setArrowType(Qt::RightArrow);
-	statusBar()->insertWidget(2, m_nextSubPageButton);
+	statusBar()->insertWidget(5, m_nextSubPageButton);
 	connect(m_nextSubPageButton, &QToolButton::clicked, m_textWidget->document(), &TeletextDocument::selectSubPageNext);
 
 	m_cursorPositionLabel = new QLabel("1, 1");
-	statusBar()->insertWidget(3, m_cursorPositionLabel);
+	statusBar()->insertWidget(6, m_cursorPositionLabel);
 
 	m_zoomSlider = new QSlider;
 	m_zoomSlider->setOrientation(Qt::Horizontal);
@@ -1216,7 +1337,7 @@ void MainWindow::createStatusBar()
 	m_zoomSlider->setRange(0, 8);
 	m_zoomSlider->setPageStep(1);
 	m_zoomSlider->setFocusPolicy(Qt::NoFocus);
-	statusBar()->insertWidget(4, m_zoomSlider);
+	statusBar()->insertWidget(7, m_zoomSlider);
 	connect(m_zoomSlider, &QSlider::valueChanged, this, &MainWindow::zoomSet);
 
 	m_insertModePushButton = new QPushButton("OVERWRITE");
@@ -1298,9 +1419,25 @@ void MainWindow::loadFile(const QString &fileName)
 	QList<PageBase> subPages;
 	QVariantHash metadata;
 
-	if (loadingFormat->load(&file, subPages, &metadata)) {
-		m_textWidget->document()->loadFromList(subPages);
+	LoadT42Format *t42Format = dynamic_cast<LoadT42Format *>(loadingFormat);
+	bool loadOk = false;
+
+	if (t42Format != nullptr) {
+		QList<TeletextPageLoadData> pageGroups;
+		loadOk = t42Format->loadPageGroups(&file, pageGroups, &metadata);
+		if (loadOk)
+			m_textWidget->document()->loadFromPageGroups(pageGroups);
+	} else {
+		loadOk = loadingFormat->load(&file, subPages, &metadata);
+		if (loadOk)
+			m_textWidget->document()->loadFromList(subPages);
+	}
+
+	if (loadOk) {
 		m_textWidget->document()->loadMetaData(metadata);
+
+		if (t42Format != nullptr && m_textWidget->document()->numberOfPages() > 1)
+			m_pageListDockWidget->show();
 
 		if (m_saveFormats.isExportOnly(QFileInfo(file).suffix()))
 			m_exportAutoFileName = fileName;
@@ -1477,6 +1614,11 @@ void MainWindow::exportFile(bool fromAuto)
 			return;
 		}
 		exportFileName = m_exportAutoFileName;
+
+		if (SaveFormat *saveFormat = m_saveFormats.findFormat(QFileInfo(exportFileName).suffix()); saveFormat != nullptr) {
+			saveFile(exportFileName);
+			return;
+		}
 	} else {
 		if (m_exportAutoFileName.isEmpty())
 			exportFileName = m_curFile;
@@ -1649,11 +1791,20 @@ void MainWindow::updateCursorPosition()
 
 void MainWindow::updatePageWidgets()
 {
-	m_subPageLabel->setText(QString("%1/%2").arg(m_textWidget->document()->currentSubPageIndex()+1).arg(m_textWidget->document()->numberOfSubPages()));
-	m_previousSubPageButton->setEnabled(!(m_textWidget->document()->currentSubPageIndex() == 0));
-	m_nextSubPageButton->setEnabled(!(m_textWidget->document()->currentSubPageIndex() == (m_textWidget->document()->numberOfSubPages()) - 1));
+	const TeletextDocument *document = m_textWidget->document();
+
+	m_pageLabel->setText(QString("P%1 (%2/%3)").arg(TeletextDocument::formatPageNumber(document->pageNumber()))
+		.arg(document->currentPageIndex()+1).arg(document->numberOfPages()));
+	m_previousPageButton->setEnabled(document->currentPageIndex() > 0);
+	m_nextPageButton->setEnabled(document->currentPageIndex() < document->numberOfPages() - 1);
+
+	m_subPageLabel->setText(QString("%1/%2").arg(document->currentSubPageIndex()+1).arg(document->numberOfSubPages()));
+	m_previousSubPageButton->setEnabled(document->currentSubPageIndex() > 0);
+	m_nextSubPageButton->setEnabled(document->currentSubPageIndex() < document->numberOfSubPages() - 1);
+
+	m_pageListDockWidget->updatePageList();
 	updateCursorPosition();
-	m_deleteSubPageAction->setEnabled(m_textWidget->document()->numberOfSubPages() > 1);
+	m_deleteSubPageAction->setEnabled(document->numberOfSubPages() > 1);
 	m_pageOptionsDockWidget->updateWidgets();
 	m_pageEnhancementsDockWidget->updateWidgets();
 	m_x26DockWidget->loadX26List();

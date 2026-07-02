@@ -105,7 +105,9 @@ public:
 	QStringList extensions() const override { return QStringList { "t42" }; };
 
 protected:
-	void writeSubPageStart(const PageBase &subPage, int subPageNumber=0);
+	void writeAllPages() override;
+	void writeSubPageStart(const PageBase &subPage, int subPageNumber=0) override;
+	void writeSubPageStart(const PageBase &subPage, int pageNumber, int subPageCode);
 	virtual int writePacket(QByteArray packet, int packetNumber, int designationCode = -1);
 
 	virtual QByteArray format7BitPacket(QByteArray packet);
@@ -169,7 +171,7 @@ public:
 
 private:
 	static const inline int s_size = 4;
-	static const inline int s_nativeSize = 1;
+	static const inline int s_nativeSize = 3;
 	static int s_instances;
 	inline static SaveFormat *s_fileFormat[s_size];
 	inline static QString s_filters, s_exportFilters;

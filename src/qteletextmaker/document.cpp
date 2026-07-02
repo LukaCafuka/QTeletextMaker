@@ -25,6 +25,11 @@
 
 #include "levelonepage.h"
 
+QString TeletextDocument::formatPageNumber(int pageNumber)
+{
+	return QString::number(pageNumber & 0x7ff, 16).toUpper().rightJustified(3, QChar('0'));
+}
+
 ClutModel::ClutModel(QObject *parent): QAbstractListModel(parent)
 {
 	m_subPage = nullptr;
@@ -60,9 +65,8 @@ void ClutModel::setSubPage(LevelOnePage *subPage)
 
 TeletextDocument::TeletextDocument()
 {
-	m_pageNumber = 0x199;
 	m_description.clear();
-	m_subPages.append(new LevelOnePage);
+	m_currentPageIndex = 0;
 	m_currentSubPageIndex = 0;
 	m_undoStack = new QUndoStack(this);
 	m_cursorRow = 1;
@@ -71,55 +75,112 @@ TeletextDocument::TeletextDocument()
 	m_selectionCornerRow = m_selectionCornerColumn = -1;
 	m_selectionSubPage = nullptr;
 
+	TeletextPageEntry initialPage;
+	initialPage.pageNumber = 0x199;
+	initialPage.subPages.append(new LevelOnePage);
+	initialPage.subPageCodes.append(0);
+	m_pages.append(initialPage);
+
 	m_clutModel = new ClutModel;
-	m_clutModel->setSubPage(m_subPages[0]);
+	m_clutModel->setSubPage(m_pages[0].subPages[0]);
 }
 
 TeletextDocument::~TeletextDocument()
 {
 	delete m_clutModel;
+	freeAllPages();
 
-	for (auto &subPage : m_subPages)
-		delete(subPage);
 	for (auto &recycleSubPage : m_recycleSubPages)
 		delete(recycleSubPage);
 }
 
+void TeletextDocument::freeAllPages()
+{
+	for (auto &pageEntry : m_pages) {
+		for (auto &subPage : pageEntry.subPages)
+			delete(subPage);
+	}
+	m_pages.clear();
+}
+
 bool TeletextDocument::isEmpty() const
 {
-	for (auto &subPage : m_subPages)
-		if (!subPage->isEmpty())
-			return false;
+	for (const auto &pageEntry : m_pages)
+		for (auto &subPage : pageEntry.subPages)
+			if (!subPage->isEmpty())
+				return false;
 
 	return true;
 }
 
 void TeletextDocument::clear()
 {
-	m_subPages.prepend(new LevelOnePage);
-
+	emit aboutToChangePage();
 	emit aboutToChangeSubPage();
+
+	freeAllPages();
+
+	TeletextPageEntry initialPage;
+	initialPage.pageNumber = 0x199;
+	initialPage.subPages.append(new LevelOnePage);
+	initialPage.subPageCodes.append(0);
+	m_pages.append(initialPage);
+
+	m_currentPageIndex = 0;
 	m_currentSubPageIndex = 0;
-	m_clutModel->setSubPage(m_subPages[0]);
+	m_clutModel->setSubPage(m_pages[0].subPages[0]);
+	emit pageSelected();
 	emit subPageSelected();
 	cancelSelection();
 	m_undoStack->clear();
+}
 
-	for (int i=m_subPages.size()-1; i>0; i--) {
-		delete(m_subPages[i]);
-		m_subPages.remove(i);
+int TeletextDocument::subPageCodeAt(int pageIndex, int subPageIndex) const
+{
+	const TeletextPageEntry &pageEntry = m_pages.at(pageIndex);
+	if (subPageIndex >= 0 && subPageIndex < pageEntry.subPageCodes.size())
+		return pageEntry.subPageCodes.at(subPageIndex);
+	return 0;
+}
+
+void TeletextDocument::selectPageIndex(int newPageIndex, bool forceRefresh)
+{
+	if (forceRefresh || (newPageIndex != m_currentPageIndex && newPageIndex >= 0 && newPageIndex < m_pages.size())) {
+		emit aboutToChangePage();
+		emit aboutToChangeSubPage();
+
+		m_currentPageIndex = newPageIndex;
+		if (m_currentSubPageIndex >= m_pages[m_currentPageIndex].subPages.size())
+			m_currentSubPageIndex = m_pages[m_currentPageIndex].subPages.size() - 1;
+
+		m_clutModel->setSubPage(m_pages[m_currentPageIndex].subPages[m_currentSubPageIndex]);
+		emit pageSelected();
+		emit subPageSelected();
+		emit selectionMoved();
 	}
+}
+
+void TeletextDocument::selectPageNext()
+{
+	if (m_currentPageIndex < m_pages.size() - 1)
+		selectPageIndex(m_currentPageIndex + 1);
+}
+
+void TeletextDocument::selectPagePrevious()
+{
+	if (m_currentPageIndex > 0)
+		selectPageIndex(m_currentPageIndex - 1);
 }
 
 void TeletextDocument::selectSubPageIndex(int newSubPageIndex, bool forceRefresh)
 {
 	// forceRefresh overrides "beyond the last subpage" check, so inserting a subpage after the last one still shows - dangerous workaround?
-	if (forceRefresh || (newSubPageIndex != m_currentSubPageIndex && newSubPageIndex < m_subPages.size())) {
+	if (forceRefresh || (newSubPageIndex != m_currentSubPageIndex && newSubPageIndex < m_pages[m_currentPageIndex].subPages.size())) {
 		emit aboutToChangeSubPage();
 
 		m_currentSubPageIndex = newSubPageIndex;
 
-		m_clutModel->setSubPage(m_subPages[m_currentSubPageIndex]);
+		m_clutModel->setSubPage(m_pages[m_currentPageIndex].subPages[m_currentSubPageIndex]);
 		emit subPageSelected();
 		emit selectionMoved();
 		return;
@@ -128,12 +189,12 @@ void TeletextDocument::selectSubPageIndex(int newSubPageIndex, bool forceRefresh
 
 void TeletextDocument::selectSubPageNext()
 {
-	if (m_currentSubPageIndex < m_subPages.size()-1) {
+	if (m_currentSubPageIndex < m_pages[m_currentPageIndex].subPages.size()-1) {
 		emit aboutToChangeSubPage();
 
 		m_currentSubPageIndex++;
 
-		m_clutModel->setSubPage(m_subPages[m_currentSubPageIndex]);
+		m_clutModel->setSubPage(m_pages[m_currentPageIndex].subPages[m_currentSubPageIndex]);
 		emit subPageSelected();
 		emit selectionMoved();
 	}
@@ -146,7 +207,7 @@ void TeletextDocument::selectSubPagePrevious()
 
 		m_currentSubPageIndex--;
 
-		m_clutModel->setSubPage(m_subPages[m_currentSubPageIndex]);
+		m_clutModel->setSubPage(m_pages[m_currentPageIndex].subPages[m_currentSubPageIndex]);
 		emit subPageSelected();
 		emit selectionMoved();
 	}
@@ -154,45 +215,97 @@ void TeletextDocument::selectSubPagePrevious()
 
 void TeletextDocument::insertSubPage(int beforeSubPageIndex, bool copySubPage)
 {
+	TeletextPageEntry &pageEntry = m_pages[m_currentPageIndex];
 	LevelOnePage *insertedSubPage;
 
 	if (copySubPage)
-		insertedSubPage = new LevelOnePage(*m_subPages.at(beforeSubPageIndex));
+		insertedSubPage = new LevelOnePage(*pageEntry.subPages.at(beforeSubPageIndex));
 	else
 		insertedSubPage = new LevelOnePage;
 
-	if (beforeSubPageIndex == m_subPages.size())
-		m_subPages.append(insertedSubPage);
-	else
-		m_subPages.insert(beforeSubPageIndex, insertedSubPage);
+	const int subPageCode = beforeSubPageIndex < pageEntry.subPageCodes.size() ? pageEntry.subPageCodes.at(beforeSubPageIndex) : 0;
+
+	if (beforeSubPageIndex == pageEntry.subPages.size()) {
+		pageEntry.subPages.append(insertedSubPage);
+		pageEntry.subPageCodes.append(subPageCode);
+	} else {
+		pageEntry.subPages.insert(beforeSubPageIndex, insertedSubPage);
+		pageEntry.subPageCodes.insert(beforeSubPageIndex, subPageCode);
+	}
 }
 
 void TeletextDocument::deleteSubPage(int subPageToDelete)
 {
 	m_clutModel->setSubPage(nullptr);
 
-	delete(m_subPages[subPageToDelete]);
-	m_subPages.remove(subPageToDelete);
+	delete(m_pages[m_currentPageIndex].subPages[subPageToDelete]);
+	m_pages[m_currentPageIndex].subPages.remove(subPageToDelete);
+	if (subPageToDelete < m_pages[m_currentPageIndex].subPageCodes.size())
+		m_pages[m_currentPageIndex].subPageCodes.remove(subPageToDelete);
 }
 
 void TeletextDocument::deleteSubPageToRecycle(int subPageToRecycle)
 {
-	m_recycleSubPages.append(m_subPages[subPageToRecycle]);
-	m_subPages.remove(subPageToRecycle);
+	m_recycleSubPages.append(m_pages[m_currentPageIndex].subPages[subPageToRecycle]);
+	m_pages[m_currentPageIndex].subPages.remove(subPageToRecycle);
+	if (subPageToRecycle < m_pages[m_currentPageIndex].subPageCodes.size())
+		m_pages[m_currentPageIndex].subPageCodes.remove(subPageToRecycle);
 }
 
 void TeletextDocument::unDeleteSubPageFromRecycle(int subPage)
 {
-	m_subPages.insert(subPage, m_recycleSubPages.last());
+	m_pages[m_currentPageIndex].subPages.insert(subPage, m_recycleSubPages.last());
+	m_pages[m_currentPageIndex].subPageCodes.insert(subPage, 0);
 	m_recycleSubPages.removeLast();
 }
 
 void TeletextDocument::loadFromList(QList<PageBase> const &subPageList)
 {
-	*m_subPages[0] = subPageList.at(0);
+	TeletextPageLoadData pageGroup;
+	pageGroup.pageNumber = m_pages[m_currentPageIndex].pageNumber;
+	pageGroup.subPages = subPageList;
+	for (int i=0; i<subPageList.size(); i++)
+		pageGroup.subPageCodes.append(i < m_pages[m_currentPageIndex].subPageCodes.size() ? m_pages[m_currentPageIndex].subPageCodes.at(i) : 0);
+	loadFromPageGroups({ pageGroup });
+}
 
-	for (int i=1; i<subPageList.size(); i++)
-		m_subPages.append(new LevelOnePage(subPageList.at(i)));
+void TeletextDocument::loadFromPageGroups(QList<TeletextPageLoadData> const &pageGroups)
+{
+	emit aboutToChangePage();
+	emit aboutToChangeSubPage();
+
+	freeAllPages();
+
+	for (const TeletextPageLoadData &pageGroup : pageGroups) {
+		TeletextPageEntry pageEntry;
+		pageEntry.pageNumber = pageGroup.pageNumber;
+
+		for (int i=0; i<pageGroup.subPages.size(); i++) {
+			pageEntry.subPages.append(new LevelOnePage(pageGroup.subPages.at(i)));
+			pageEntry.subPageCodes.append(i < pageGroup.subPageCodes.size() ? pageGroup.subPageCodes.at(i) : 0);
+		}
+
+		if (pageEntry.subPages.isEmpty()) {
+			pageEntry.subPages.append(new LevelOnePage);
+			pageEntry.subPageCodes.append(0);
+		}
+
+		m_pages.append(pageEntry);
+	}
+
+	if (m_pages.isEmpty()) {
+		TeletextPageEntry initialPage;
+		initialPage.pageNumber = 0x199;
+		initialPage.subPages.append(new LevelOnePage);
+		initialPage.subPageCodes.append(0);
+		m_pages.append(initialPage);
+	}
+
+	m_currentPageIndex = 0;
+	m_currentSubPageIndex = 0;
+	m_clutModel->setSubPage(m_pages[0].subPages[0]);
+	emit pageSelected();
+	emit subPageSelected();
 }
 
 void TeletextDocument::loadMetaData(QVariantHash const &metadata)
@@ -203,12 +316,12 @@ void TeletextDocument::loadMetaData(QVariantHash const &metadata)
 		m_description = description;
 
 	if (const int pageNumber = metadata.value("pageNumber").toInt(&valueOk); valueOk)
-		m_pageNumber = pageNumber;
+		m_pages[m_currentPageIndex].pageNumber = pageNumber;
 
 	if (metadata.value("fastextAbsolute").toBool()) {
-		const int magazineFlip = m_pageNumber & 0x700;
+		const int magazineFlip = m_pages[m_currentPageIndex].pageNumber & 0x700;
 
-		for (auto &subPage : m_subPages)
+		for (auto &subPage : m_pages[m_currentPageIndex].subPages)
 			for (int i=0; i<6; i++)
 				subPage->setFastTextLinkPageNumber(i, subPage->fastTextLinkPageNumber(i) ^ magazineFlip);
 	}
@@ -232,11 +345,26 @@ void TeletextDocument::loadMetaData(QVariantHash const &metadata)
 	}
 }
 
+void TeletextDocument::applyMagazineFlipToPage(TeletextPageEntry &pageEntry, int magazineFlip)
+{
+	if (!magazineFlip)
+		return;
+
+	for (auto &subPage : pageEntry.subPages) {
+		for (int i=0; i<6; i++)
+			subPage->setFastTextLinkPageNumber(i, subPage->fastTextLinkPageNumber(i) ^ magazineFlip);
+		for (int i=0; i<8; i++)
+			subPage->setComposeLinkPageNumber(i, subPage->composeLinkPageNumber(i) ^ magazineFlip);
+	}
+}
+
 void TeletextDocument::setPageNumber(int pageNumber)
 {
+	TeletextPageEntry &pageEntry = m_pages[m_currentPageIndex];
+
 	// If the magazine number was changed, we need to update the relative magazine numbers in FastText
 	// and page enhancement links
-	int oldMagazine = (m_pageNumber & 0xf00);
+	int oldMagazine = (pageEntry.pageNumber & 0xf00);
 	int newMagazine = (pageNumber & 0xf00);
 	// Fix magazine 0 to 8
 	if (oldMagazine == 0x800)
@@ -245,15 +373,8 @@ void TeletextDocument::setPageNumber(int pageNumber)
 		newMagazine = 0x000;
 	int magazineFlip = oldMagazine ^ newMagazine;
 
-	m_pageNumber = pageNumber;
-
-	for (auto &subPage : m_subPages)
-		if (magazineFlip) {
-			for (int i=0; i<6; i++)
-				subPage->setFastTextLinkPageNumber(i, subPage->fastTextLinkPageNumber(i) ^ magazineFlip);
-			for (int i=0; i<8; i++)
-				subPage->setComposeLinkPageNumber(i, subPage->composeLinkPageNumber(i) ^ magazineFlip);
-	}
+	pageEntry.pageNumber = pageNumber;
+	applyMagazineFlipToPage(pageEntry, magazineFlip);
 }
 
 void TeletextDocument::setPageNumberFromString(QString pageNumberString)
@@ -274,7 +395,7 @@ void TeletextDocument::setDescription(QString newDescription)
 
 void TeletextDocument::setFastTextLinkPageNumberOnAllSubPages(int linkNumber, int pageNumber)
 {
-	for (auto &subPage : m_subPages)
+	for (auto &subPage : m_pages[m_currentPageIndex].subPages)
 		subPage->setFastTextLinkPageNumber(linkNumber, pageNumber);
 }
 
@@ -409,11 +530,12 @@ int TeletextDocument::levelRequired() const
 {
 	int levelSeen = 0;
 
-	for (auto &subPage : m_subPages) {
-		levelSeen = qMax(levelSeen, subPage->levelRequired());
-		if (levelSeen == 3)
-			break;
-	}
+	for (const auto &pageEntry : m_pages)
+		for (auto &subPage : pageEntry.subPages) {
+			levelSeen = qMax(levelSeen, subPage->levelRequired());
+			if (levelSeen == 3)
+				return levelSeen;
+		}
 
 	return levelSeen;
 }

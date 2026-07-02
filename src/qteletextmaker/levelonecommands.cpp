@@ -34,10 +34,17 @@
 LevelOneCommand::LevelOneCommand(TeletextDocument *teletextDocument, QUndoCommand *parent) : QUndoCommand(parent)
 {
 	m_teletextDocument = teletextDocument;
+	m_pageIndex = teletextDocument->currentPageIndex();
 	m_subPageIndex = teletextDocument->currentSubPageIndex();
 	m_row = teletextDocument->cursorRow();
 	m_column = teletextDocument->cursorColumn();
 	m_firstDo = true;
+}
+
+void LevelOneCommand::selectCommandPage()
+{
+	m_teletextDocument->selectPageIndex(m_pageIndex, true);
+	m_teletextDocument->selectSubPageIndex(m_subPageIndex, true);
 }
 
 QByteArrayList LevelOneCommand::storeCharacters(int topRow, int leftColumn, int bottomRow, int rightColumn)
@@ -102,7 +109,7 @@ TypeCharacterCommand::TypeCharacterCommand(TeletextDocument *teletextDocument, u
 
 void TypeCharacterCommand::redo()
 {
-	m_teletextDocument->selectSubPageIndex(m_subPageIndex);
+	selectCommandPage();
 
 	// Only apply the typed character on the first do, m_newRowContents will remember it if we redo
 	if (m_firstDo) {
@@ -124,7 +131,7 @@ void TypeCharacterCommand::redo()
 
 void TypeCharacterCommand::undo()
 {
-	m_teletextDocument->selectSubPageIndex(m_subPageIndex);
+	selectCommandPage();
 
 	for (int c=0; c<40; c++)
 		m_teletextDocument->currentSubPage()->setCharacter(m_row, c, m_oldRowContents[c]);
@@ -138,7 +145,7 @@ bool TypeCharacterCommand::mergeWith(const QUndoCommand *command)
 	const TypeCharacterCommand *newerCommand = static_cast<const TypeCharacterCommand *>(command);
 
 	// Has to be the next typed column on the same row
-	if (m_subPageIndex != newerCommand->m_subPageIndex || m_row != newerCommand->m_row || m_columnEnd != newerCommand->m_columnEnd-1)
+	if (m_pageIndex != newerCommand->m_pageIndex || m_subPageIndex != newerCommand->m_subPageIndex || m_row != newerCommand->m_row || m_columnEnd != newerCommand->m_columnEnd-1)
 		return false;
 
 	m_columnEnd = newerCommand->m_columnEnd;
@@ -172,7 +179,7 @@ ToggleMosaicBitCommand::ToggleMosaicBitCommand(TeletextDocument *teletextDocumen
 
 void ToggleMosaicBitCommand::redo()
 {
-	m_teletextDocument->selectSubPageIndex(m_subPageIndex);
+	selectCommandPage();
 	m_teletextDocument->currentSubPage()->setCharacter(m_row, m_column, m_newCharacter);
 
 	m_teletextDocument->moveCursor(m_row, m_column);
@@ -181,7 +188,7 @@ void ToggleMosaicBitCommand::redo()
 
 void ToggleMosaicBitCommand::undo()
 {
-	m_teletextDocument->selectSubPageIndex(m_subPageIndex);
+	selectCommandPage();
 	m_teletextDocument->currentSubPage()->setCharacter(m_row, m_column, m_oldCharacter);
 
 	m_teletextDocument->moveCursor(m_row, m_column);
@@ -192,7 +199,7 @@ bool ToggleMosaicBitCommand::mergeWith(const QUndoCommand *command)
 {
 	const ToggleMosaicBitCommand *newerCommand = static_cast<const ToggleMosaicBitCommand *>(command);
 
-	if (m_subPageIndex != newerCommand->m_subPageIndex || m_row != newerCommand->m_row || m_column != newerCommand->m_column)
+	if (m_pageIndex != newerCommand->m_pageIndex || m_subPageIndex != newerCommand->m_subPageIndex || m_row != newerCommand->m_row || m_column != newerCommand->m_column)
 		return false;
 	m_newCharacter = newerCommand->m_newCharacter;
 	return true;
@@ -219,7 +226,7 @@ BackspaceKeyCommand::BackspaceKeyCommand(TeletextDocument *teletextDocument, boo
 
 void BackspaceKeyCommand::redo()
 {
-	m_teletextDocument->selectSubPageIndex(m_subPageIndex);
+	selectCommandPage();
 
 	if (m_firstDo) {
 		if (m_insertMode) {
@@ -242,7 +249,7 @@ void BackspaceKeyCommand::redo()
 
 void BackspaceKeyCommand::undo()
 {
-	m_teletextDocument->selectSubPageIndex(m_subPageIndex);
+	selectCommandPage();
 
 	for (int c=0; c<40; c++)
 		m_teletextDocument->currentSubPage()->setCharacter(m_row, c, m_oldRowContents[c]);
@@ -257,7 +264,7 @@ bool BackspaceKeyCommand::mergeWith(const QUndoCommand *command)
 	const BackspaceKeyCommand *newerCommand = static_cast<const BackspaceKeyCommand *>(command);
 
 	// Has to be the next backspaced column on the same row
-	if (m_subPageIndex != newerCommand->m_subPageIndex || m_row != newerCommand->m_row || m_columnEnd != newerCommand->m_columnEnd+1)
+	if (m_pageIndex != newerCommand->m_pageIndex || m_subPageIndex != newerCommand->m_subPageIndex || m_row != newerCommand->m_row || m_columnEnd != newerCommand->m_columnEnd+1)
 		return false;
 
 	// For backspacing m_columnStart is where we began backspacing and m_columnEnd is where we ended backspacing
@@ -280,7 +287,7 @@ DeleteKeyCommand::DeleteKeyCommand(TeletextDocument *teletextDocument, QUndoComm
 
 void DeleteKeyCommand::redo()
 {
-	m_teletextDocument->selectSubPageIndex(m_subPageIndex);
+	selectCommandPage();
 
 	// Move characters leftwards and put a space on the far right
 	for (int c=m_column; c<39; c++)
@@ -296,7 +303,7 @@ void DeleteKeyCommand::redo()
 
 void DeleteKeyCommand::undo()
 {
-	m_teletextDocument->selectSubPageIndex(m_subPageIndex);
+	selectCommandPage();
 
 	for (int c=0; c<40; c++)
 		m_teletextDocument->currentSubPage()->setCharacter(m_row, c, m_oldRowContents[c]);
@@ -309,7 +316,7 @@ bool DeleteKeyCommand::mergeWith(const QUndoCommand *command)
 {
 	const DeleteKeyCommand *newerCommand = static_cast<const DeleteKeyCommand *>(command);
 
-	if (m_subPageIndex != newerCommand->m_subPageIndex || m_row != newerCommand->m_row || m_column != newerCommand->m_column)
+	if (m_pageIndex != newerCommand->m_pageIndex || m_subPageIndex != newerCommand->m_subPageIndex || m_row != newerCommand->m_row || m_column != newerCommand->m_column)
 		return false;
 
 	for (int c=0; c<40; c++)
@@ -337,7 +344,7 @@ ShiftMosaicsCommand::ShiftMosaicsCommand(TeletextDocument *teletextDocument, con
 
 void ShiftMosaicsCommand::redo()
 {
-	m_teletextDocument->selectSubPageIndex(m_subPageIndex);
+	selectCommandPage();
 	retrieveCharacters(m_selectionTopRow, m_selectionLeftColumn, m_newCharacters);
 
 	emit m_teletextDocument->contentsChanged();
@@ -348,7 +355,7 @@ void ShiftMosaicsCommand::redo()
 
 void ShiftMosaicsCommand::undo()
 {
-	m_teletextDocument->selectSubPageIndex(m_subPageIndex);
+	selectCommandPage();
 	retrieveCharacters(m_selectionTopRow, m_selectionLeftColumn, m_oldCharacters);
 
 	emit m_teletextDocument->contentsChanged();
@@ -361,7 +368,7 @@ bool ShiftMosaicsCommand::mergeWith(const QUndoCommand *command)
 {
 	const ShiftMosaicsCommand *newerCommand = static_cast<const ShiftMosaicsCommand *>(command);
 
-	if (m_subPageIndex != newerCommand->m_subPageIndex || m_selectionTopRow != newerCommand->m_selectionTopRow || m_selectionLeftColumn != newerCommand->m_selectionLeftColumn || m_selectionBottomRow != newerCommand->m_selectionBottomRow || m_selectionRightColumn != newerCommand->m_selectionRightColumn)
+	if (m_pageIndex != newerCommand->m_pageIndex || m_subPageIndex != newerCommand->m_subPageIndex || m_selectionTopRow != newerCommand->m_selectionTopRow || m_selectionLeftColumn != newerCommand->m_selectionLeftColumn || m_selectionBottomRow != newerCommand->m_selectionBottomRow || m_selectionRightColumn != newerCommand->m_selectionRightColumn)
 		return false;
 
 	m_newCharacters = newerCommand->m_newCharacters;
@@ -485,7 +492,7 @@ bool InvertMosaicsCommand::mergeWith(const QUndoCommand *command)
 {
 	const InvertMosaicsCommand *newerCommand = static_cast<const InvertMosaicsCommand *>(command);
 
-	if (m_subPageIndex != newerCommand->m_subPageIndex || m_selectionTopRow != newerCommand->m_selectionTopRow || m_selectionLeftColumn != newerCommand->m_selectionLeftColumn || m_selectionBottomRow != newerCommand->m_selectionBottomRow || m_selectionRightColumn != newerCommand->m_selectionRightColumn)
+	if (m_pageIndex != newerCommand->m_pageIndex || m_subPageIndex != newerCommand->m_subPageIndex || m_selectionTopRow != newerCommand->m_selectionTopRow || m_selectionLeftColumn != newerCommand->m_selectionLeftColumn || m_selectionBottomRow != newerCommand->m_selectionBottomRow || m_selectionRightColumn != newerCommand->m_selectionRightColumn)
 		return false;
 
 	setObsolete(true);
@@ -513,7 +520,7 @@ InsertRowCommand::InsertRowCommand(TeletextDocument *teletextDocument, bool copy
 
 void InsertRowCommand::redo()
 {
-	m_teletextDocument->selectSubPageIndex(m_subPageIndex);
+	selectCommandPage();
 	m_teletextDocument->moveCursor(m_row, -1);
 	// Store copy of the bottom row we're about to push out, for undo
 	for (int c=0; c<40; c++)
@@ -532,7 +539,7 @@ void InsertRowCommand::redo()
 
 void InsertRowCommand::undo()
 {
-	m_teletextDocument->selectSubPageIndex(m_subPageIndex);
+	selectCommandPage();
 	m_teletextDocument->moveCursor(m_row, -1);
 	// Move lines below the deleting row upwards without affecting the FastText row
 	for (int r=m_row; r<23; r++)
@@ -553,7 +560,7 @@ DeleteRowCommand::DeleteRowCommand(TeletextDocument *teletextDocument, QUndoComm
 
 void DeleteRowCommand::redo()
 {
-	m_teletextDocument->selectSubPageIndex(m_subPageIndex);
+	selectCommandPage();
 	m_teletextDocument->moveCursor(m_row, -1);
 	// Store copy of the row we're going to delete, for undo
 	for (int c=0; c<40; c++)
@@ -572,7 +579,7 @@ void DeleteRowCommand::redo()
 
 void DeleteRowCommand::undo()
 {
-	m_teletextDocument->selectSubPageIndex(m_subPageIndex);
+	selectCommandPage();
 	m_teletextDocument->moveCursor(m_row, -1);
 	// Move lines below the inserting row downwards without affecting the FastText row
 	for (int r=22; r>=m_row; r--)
@@ -604,7 +611,7 @@ CutCommand::CutCommand(TeletextDocument *teletextDocument, QUndoCommand *parent)
 
 void CutCommand::redo()
 {
-	m_teletextDocument->selectSubPageIndex(m_subPageIndex);
+	selectCommandPage();
 
 	for (int r=m_selectionTopRow; r<=m_selectionBottomRow; r++) {
 		for (int c=m_selectionLeftColumn; c<=m_selectionRightColumn; c++)
@@ -616,7 +623,7 @@ void CutCommand::redo()
 
 void CutCommand::undo()
 {
-	m_teletextDocument->selectSubPageIndex(m_subPageIndex);
+	selectCommandPage();
 
 	retrieveCharacters(m_selectionTopRow, m_selectionLeftColumn, m_oldCharacters);
 
@@ -882,7 +889,7 @@ void PasteCommand::redo()
 	if (m_clipboardDataWidth == 0 || m_clipboardDataHeight == 0)
 		return;
 
-	m_teletextDocument->selectSubPageIndex(m_subPageIndex);
+	selectCommandPage();
 
 	int arrayR = 0;
 	int arrayC;
@@ -936,7 +943,7 @@ void PasteCommand::undo()
 	if (m_clipboardDataWidth == 0 || m_clipboardDataHeight == 0)
 		return;
 
-	m_teletextDocument->selectSubPageIndex(m_subPageIndex);
+	selectCommandPage();
 
 	retrieveCharacters(m_pasteTopRow, m_pasteLeftColumn, m_oldCharacters);
 
@@ -961,6 +968,7 @@ void InsertSubPageCommand::redo()
 {
 	m_teletextDocument->insertSubPage(m_newSubPageIndex, m_copySubPage);
 
+	selectCommandPage();
 	m_teletextDocument->selectSubPageIndex(m_newSubPageIndex, true);
 }
 
@@ -969,6 +977,7 @@ void InsertSubPageCommand::undo()
 	m_teletextDocument->deleteSubPage(m_newSubPageIndex);
 	//TODO should we always wrench to "subpage viewed when we inserted"? Or just if subpage viewed is being deleted?
 
+	selectCommandPage();
 	m_teletextDocument->selectSubPageIndex(qMin(m_newSubPageIndex, m_teletextDocument->numberOfSubPages()-1), true);
 }
 
@@ -981,11 +990,13 @@ DeleteSubPageCommand::DeleteSubPageCommand(TeletextDocument *teletextDocument, Q
 void DeleteSubPageCommand::redo()
 {
 	m_teletextDocument->deleteSubPageToRecycle(m_subPageIndex);
+	selectCommandPage();
 	m_teletextDocument->selectSubPageIndex(qMin(m_subPageIndex, m_teletextDocument->numberOfSubPages()-1), true);
 }
 
 void DeleteSubPageCommand::undo()
 {
 	m_teletextDocument->unDeleteSubPageFromRecycle(m_subPageIndex);
+	selectCommandPage();
 	m_teletextDocument->selectSubPageIndex(m_subPageIndex, true);
 }

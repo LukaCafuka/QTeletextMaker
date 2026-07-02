@@ -220,7 +220,130 @@ bool LoadT42Format::readPacket()
 	return m_inFile->read((char *)m_inLine, 42) == 42;
 }
 
-bool LoadT42Format::load(QFile *inFile, QList<PageBase>& subPages, QVariantHash *metadata)
+int LoadT42Format::subPageCodeFromPacket0() const
+{
+	return (m_inLine[4] & 0x0f)
+		| ((m_inLine[5] & 0x07) << 4)
+		| ((m_inLine[6] & 0x0f) << 8)
+		| ((m_inLine[7] & 0x03) << 12);
+}
+
+void LoadT42Format::applyPacket0Header(PageBase *loadingPage, int /*subPageCode*/)
+{
+	loadingPage->setControlBit(PageBase::C4ErasePage, m_inLine[5] & 0x08);
+	loadingPage->setControlBit(PageBase::C5Newsflash, m_inLine[7] & 0x04);
+	loadingPage->setControlBit(PageBase::C6Subtitle, m_inLine[7] & 0x08);
+	for (int i=0; i<4; i++)
+		loadingPage->setControlBit(PageBase::C7SuppressHeader+i, m_inLine[8] & (1 << i));
+	loadingPage->setControlBit(PageBase::C11SerialMagazine, m_inLine[9] & 0x01);
+	loadingPage->setControlBit(PageBase::C12NOS, m_inLine[9] & 0x08);
+	loadingPage->setControlBit(PageBase::C13NOS, m_inLine[9] & 0x04);
+	loadingPage->setControlBit(PageBase::C14NOS, m_inLine[9] & 0x02);
+
+	bool headerText = false;
+
+	for (int i=10; i<42; i++)
+		if (m_inLine[i] != 0x20) {
+			m_inLine[i] &= 0x7f;
+			headerText = true;
+		}
+	if (headerText) {
+		for (int i=0; i<10; i++)
+			m_inLine[i] = 0x20;
+
+		loadingPage->setPacket(0, QByteArray((const char *)&m_inLine[2], 40));
+	}
+}
+
+bool LoadT42Format::loadBodyPacket(PageBase *loadingPage, int readPacketNumber, bool &errorEnhancements, bool &errorLinks, bool &errorPresentation)
+{
+	if (readPacketNumber < 25) {
+		for (int i=2; i<42; i++)
+			m_inLine[i] &= 0x7f;
+		loadingPage->setPacket(readPacketNumber, QByteArray((const char *)&m_inLine[2], 40));
+		return true;
+	}
+
+	int readDesignationCode = hamming_8_4_decode[m_inLine[2]];
+
+	if (readDesignationCode == 0xff)
+		return false;
+
+	if (readPacketNumber == 27 && readDesignationCode < 4) {
+		for (int i=0; i<6; i++) {
+			bool decodingError = false;
+			const int b = 3 + i*6;
+
+			for (int j=0; j<6; j++) {
+				m_inLine[b+j] = hamming_8_4_decode[m_inLine[b+j]];
+				if (m_inLine[b+j] == 0xff) {
+					decodingError = true;
+					break;
+				}
+			}
+
+			if (decodingError) {
+				qDebug("X/27/%d link %d decoding error", readDesignationCode, i);
+				errorLinks = true;
+				m_inLine[b]   = 0xf;
+				m_inLine[b+1] = 0xf;
+				m_inLine[b+2] = 0xf;
+				m_inLine[b+3] = 0x7;
+				m_inLine[b+4] = 0xf;
+				m_inLine[b+5] = 0x3;
+			}
+		}
+		loadingPage->setPacket(readPacketNumber, readDesignationCode, QByteArray((const char *)&m_inLine[2], 40));
+		return true;
+	}
+
+	for (int i=0; i<13; i++) {
+		const int b = 3 + i*3;
+
+		const int p0 = m_inLine[b];
+		const int p1 = m_inLine[b+1];
+		const int p2 = m_inLine[b+2];
+
+		unsigned int D1_D4;
+		unsigned int D5_D11;
+		unsigned int D12_D18;
+		unsigned int ABCDEF;
+		int32_t d;
+
+		D1_D4 = hamming_24_18_decode_d1_d4[p0 >> 2];
+		D5_D11 = p1 & 0x7f;
+		D12_D18 = p2 & 0x7f;
+
+		d = D1_D4 | (D5_D11 << 4) | (D12_D18 << 11);
+
+		ABCDEF = (hamming_24_18_parities[0][p0] ^ hamming_24_18_parities[1][p1]  ^ hamming_24_18_parities[2][p2]);
+
+		d ^= (int)hamming_24_18_decode_correct[ABCDEF];
+
+		if ((d & 0x80000000) == 0x80000000) {
+			qDebug("X/%d/%d triplet %d decoding error", readPacketNumber, readDesignationCode, i);
+			if (readPacketNumber == 26) {
+				m_inLine[b]   = 0xff;
+				m_inLine[b+1] = 0xff;
+				m_inLine[b+2] = 0xff;
+				errorEnhancements = true;
+			} else {
+				m_inLine[b]   = 0x00;
+				m_inLine[b+1] = 0x00;
+				m_inLine[b+2] = 0x00;
+				errorPresentation = true;
+			}
+		} else {
+			m_inLine[b]   = d & 0x0003f;
+			m_inLine[b+1] = (d & 0x00fc0) >> 6;
+			m_inLine[b+2] = d >> 12;
+		}
+	}
+	loadingPage->setPacket(readPacketNumber, readDesignationCode, QByteArray((const char *)&m_inLine[2], 40));
+	return true;
+}
+
+bool LoadT42Format::loadPageGroups(QFile *inFile, QList<TeletextPageLoadData> &pageGroups, QVariantHash *metadata)
 {
 	int readMagazineNumber, readPacketNumber;
 	int foundMagazineNumber = -1;
@@ -237,214 +360,111 @@ bool LoadT42Format::load(QFile *inFile, QList<PageBase>& subPages, QVariantHash 
 	m_error.clear();
 	m_reExportWarning = false;
 
-//	subPages.clear();
-	subPages.append(PageBase { });
+	pageGroups.clear();
 
-	PageBase* loadingPage = &subPages[0];
+	TeletextPageLoadData *currentGroup = nullptr;
+	PageBase *loadingPage = nullptr;
+
+	auto startNewSubPage = [&](int subPageCode) {
+		currentGroup->subPages.append(PageBase { });
+		currentGroup->subPageCodes.append(subPageCode);
+		loadingPage = &currentGroup->subPages.last();
+		pageBodyPacketsFound = false;
+	};
+
+	auto startNewPage = [&](int magazineNumber, int pageNumber, int subPageCode) {
+		TeletextPageLoadData group;
+		if (magazineNumber == 0)
+			group.pageNumber = 0x800 | pageNumber;
+		else
+			group.pageNumber = (magazineNumber << 8) | pageNumber;
+		group.subPages.append(PageBase { });
+		group.subPageCodes.append(subPageCode);
+		pageGroups.append(group);
+		currentGroup = &pageGroups.last();
+		loadingPage = &currentGroup->subPages[0];
+		foundMagazineNumber = magazineNumber;
+		foundPageNumber = pageNumber;
+		firstPacket0Found = true;
+		pageBodyPacketsFound = false;
+
+		if (metadata != nullptr && pageGroups.size() == 1)
+			metadata->insert("pageNumber", group.pageNumber);
+	};
 
 	for (;;) {
 		if (!readPacket())
-			// Reached end of .t42 file, or less than 42 bytes left
 			break;
 
-		// Magazine and packet numbers
 		m_inLine[0] = hamming_8_4_decode[m_inLine[0]];
 		m_inLine[1] = hamming_8_4_decode[m_inLine[1]];
 		if (m_inLine[0] == 0xff || m_inLine[1] == 0xff)
-			// Error decoding magazine or packet number
 			continue;
 		readMagazineNumber = m_inLine[0] & 0x07;
 		readPacketNumber = (m_inLine[0] >> 3) | (m_inLine[1] << 1);
 
 		if (readPacketNumber == 0) {
-			// Hamming decode page number, subcodes and control bits
 			for (int i=2; i<10; i++)
 				m_inLine[i] = hamming_8_4_decode[m_inLine[i]];
-			// See if the page number is valid
 			if (m_inLine[2] == 0xff || m_inLine[3] == 0xff)
-				// Error decoding page number
 				continue;
 
 			const int readPageNumber = (m_inLine[3] << 4) | m_inLine[2];
 
 			if (readPageNumber == 0xff)
-				// Time filling header
 				continue;
 
-			// A second or subsequent X/0 has been found
+			const int subPageCode = subPageCodeFromPacket0();
+
 			if (firstPacket0Found) {
 				if (readMagazineNumber != foundMagazineNumber)
-					// Packet from different magazine broadcast in parallel mode
 					continue;
-				if ((readPageNumber == foundPageNumber) && pageBodyPacketsFound)
-					// X/0 with same page number found after page body packets loaded - assume end of page
-					break;
+				if ((readPageNumber == foundPageNumber) && pageBodyPacketsFound) {
+					startNewSubPage(subPageCode);
+					applyPacket0Header(loadingPage, subPageCode);
+					continue;
+				}
 				if (readPageNumber != foundPageNumber) {
-					// More than one page in .t42 file - end of current page reached
-					m_warnings.append("More than one page in .t42 file, only first full page loaded.");
-					m_reExportWarning = true;
-					break;
-				}
-				// Could get here if X/0 with same page number was found with no body packets inbetween
-				continue;
-			} else {
-				// First X/0 found
-				foundMagazineNumber = readMagazineNumber;
-				foundPageNumber = readPageNumber;
-				firstPacket0Found = true;
-
-				if (metadata != nullptr) {
-					if (foundMagazineNumber == 0)
-						metadata->insert("pageNumber", 0x800 | foundPageNumber);
-					else
-						metadata->insert("pageNumber", (foundMagazineNumber << 8) | foundPageNumber);
-				}
-
-				loadingPage->setControlBit(PageBase::C4ErasePage, m_inLine[5] & 0x08);
-				loadingPage->setControlBit(PageBase::C5Newsflash, m_inLine[7] & 0x04);
-				loadingPage->setControlBit(PageBase::C6Subtitle, m_inLine[7] & 0x08);
-				for (int i=0; i<4; i++)
-					loadingPage->setControlBit(PageBase::C7SuppressHeader+i, m_inLine[8] & (1 << i));
-				loadingPage->setControlBit(PageBase::C11SerialMagazine, m_inLine[9] & 0x01);
-				loadingPage->setControlBit(PageBase::C12NOS, m_inLine[9] & 0x08);
-				loadingPage->setControlBit(PageBase::C13NOS, m_inLine[9] & 0x04);
-				loadingPage->setControlBit(PageBase::C14NOS, m_inLine[9] & 0x02);
-
-				// See if there's text in the header row
-				bool headerText = false;
-
-				for (int i=10; i<42; i++)
-					if (m_inLine[i] != 0x20) {
-						// TODO - obey odd parity?
-						m_inLine[i] &= 0x7f;
-						headerText = true;
-					}
-				if (headerText) {
-					// Clear the page address and control bits to spaces before putting the row in
-					for (int i=0; i<10; i++)
-						m_inLine[i] = 0x20;
-
-					loadingPage->setPacket(0, QByteArray((const char *)&m_inLine[2], 40));
+					startNewPage(readMagazineNumber, readPageNumber, subPageCode);
+					applyPacket0Header(loadingPage, subPageCode);
+					continue;
 				}
 				continue;
 			}
+
+			startNewPage(readMagazineNumber, readPageNumber, subPageCode);
+			applyPacket0Header(loadingPage, subPageCode);
+			continue;
 		}
 
-		// No X/0 has been found yet, keep looking for one
 		if (!firstPacket0Found)
 			continue;
 
-		// Disregard whole-magazine packets
 		if (readPacketNumber > 28)
 			continue;
 
-		// We get here when a page-body packet belonging to the found X/0 header was found
 		pageBodyPacketsFound = true;
-
-		// At the moment this only loads a Level One Page properly
-		// because it assumes X/1 to X/25 is odd partity
-		if (readPacketNumber < 25) {
-			for (int i=2; i<42; i++)
-				// TODO - obey odd parity?
-				m_inLine[i] &= 0x7f;
-			loadingPage->setPacket(readPacketNumber, QByteArray((const char *)&m_inLine[2], 40));
-			continue;
-		}
-
-		// X/26, X/27 or X/28
-		int readDesignationCode = hamming_8_4_decode[m_inLine[2]];
-
-		if (readDesignationCode == 0xff)
-			// Error decoding designation code
-			continue;
-
-		if (readPacketNumber == 27 && readDesignationCode < 4) {
-			// X/27/0 to X/27/3 for Editorial Linking
-			// Decode Hamming 8/4 on each of the six links, checking for errors on the way
-			for (int i=0; i<6; i++) {
-				bool decodingError = false;
-				const int b = 3 + i*6; // First byte of this link
-
-				for (int j=0; j<6; j++) {
-					m_inLine[b+j] = hamming_8_4_decode[m_inLine[b+j]];
-					if (m_inLine[b+j] == 0xff) {
-						decodingError = true;
-						break;
-					}
-				}
-
-				if (decodingError) {
-					// Error found in at least one byte of the link
-					// Neutralise the whole link to same magazine, page FF, subcode 3F7F
-					qDebug("X/27/%d link %d decoding error", readDesignationCode, i);
-					errorLinks = true;
-					m_inLine[b]   = 0xf;
-					m_inLine[b+1] = 0xf;
-					m_inLine[b+2] = 0xf;
-					m_inLine[b+3] = 0x7;
-					m_inLine[b+4] = 0xf;
-					m_inLine[b+5] = 0x3;
-				}
-			}
-			loadingPage->setPacket(readPacketNumber, readDesignationCode, QByteArray((const char *)&m_inLine[2], 40));
-
-			continue;
-		}
-
-		// X/26, or X/27/4 to X/27/15, or X/28
-		// Decode Hamming 24/18
-		for (int i=0; i<13; i++) {
-			const int b = 3 + i*3; // First byte of triplet
-
-			const int p0 = m_inLine[b];
-			const int p1 = m_inLine[b+1];
-			const int p2 = m_inLine[b+2];
-
-			unsigned int D1_D4;
-			unsigned int D5_D11;
-			unsigned int D12_D18;
-			unsigned int ABCDEF;
-			int32_t d;
-
-			D1_D4 = hamming_24_18_decode_d1_d4[p0 >> 2];
-			D5_D11 = p1 & 0x7f;
-			D12_D18 = p2 & 0x7f;
-
-			d = D1_D4 | (D5_D11 << 4) | (D12_D18 << 11);
-
-			ABCDEF = (hamming_24_18_parities[0][p0] ^ hamming_24_18_parities[1][p1]  ^ hamming_24_18_parities[2][p2]);
-
-			d ^= (int)hamming_24_18_decode_correct[ABCDEF];
-
-			if ((d & 0x80000000) == 0x80000000) {
-				// Error decoding Hamming 24/18
-				qDebug("X/%d/%d triplet %d decoding error", readPacketNumber, readDesignationCode, i);
-				if (readPacketNumber == 26) {
-					// Enhancements packet, set to invalid triplet
-					m_inLine[b]   = 0xff;
-					m_inLine[b+1] = 0xff;
-					m_inLine[b+2] = 0xff;
-					errorEnhancements = true;
-				} else {
-					// Zero out whole decoded triplet, bound to make things go wrong...
-					m_inLine[b]   = 0x00;
-					m_inLine[b+1] = 0x00;
-					m_inLine[b+2] = 0x00;
-					errorPresentation = true;
-				}
-			} else {
-				m_inLine[b]   = d & 0x0003f;
-				m_inLine[b+1] = (d & 0x00fc0) >> 6;
-				m_inLine[b+2] = d >> 12;
-			}
-		}
-		loadingPage->setPacket(readPacketNumber, readDesignationCode, QByteArray((const char *)&m_inLine[2], 40));
+		loadBodyPacket(loadingPage, readPacketNumber, errorEnhancements, errorLinks, errorPresentation);
 	}
 
 	if (!firstPacket0Found) {
 		m_error = "No X/0 found.";
 		return false;
-	} else if (!pageBodyPacketsFound) {
+	}
+
+	bool anyBodyPackets = false;
+	for (const TeletextPageLoadData &group : pageGroups) {
+		for (const PageBase &subPage : group.subPages) {
+			if (!subPage.isEmpty()) {
+				anyBodyPackets = true;
+				break;
+			}
+		}
+		if (anyBodyPackets)
+			break;
+	}
+
+	if (!anyBodyPackets) {
 		m_error = "X/0 found, but no page body packets were found.";
 		return false;
 	}
@@ -455,6 +475,18 @@ bool LoadT42Format::load(QFile *inFile, QList<PageBase>& subPages, QVariantHash 
 		m_warnings.append("Error decoding FLOF links.");
 	if (errorPresentation)
 		m_warnings.append("Error decoding triplet(s) in presentation data.");
+	return true;
+}
+
+bool LoadT42Format::load(QFile *inFile, QList<PageBase>& subPages, QVariantHash *metadata)
+{
+	QList<TeletextPageLoadData> pageGroups;
+
+	if (!loadPageGroups(inFile, pageGroups, metadata))
+		return false;
+
+	subPages.clear();
+	subPages = pageGroups.first().subPages;
 	return true;
 }
 
