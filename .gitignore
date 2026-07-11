@@ -1,4 +1,11 @@
 Makefile
 build*/
 cmake-build-*/
+
+# Qt Creator
+.qtcreator/
+*.user
+*.user.*
+*.autosave
+
 .idea

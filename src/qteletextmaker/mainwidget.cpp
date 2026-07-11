@@ -126,56 +126,6 @@ void TeletextWidget::paintEvent(QPaintEvent *event)
 		emit fullRowColourChanged(r, m_pageDecode.fullRowQColor(r));
 }
 
-QImage TeletextWidget::renderSubPageImage(LevelOnePage *subPage, int scaleFactor, int viewAspectRatio, bool applyViewAspectRatio, bool smoothUpscale) const
-{
-	static const float aspectRatioHorizontalScaling[4] = { 0.6, 0.6, 0.8, 0.5 };
-
-	TeletextPageDecode pageDecode;
-	TeletextPageRender pageRender;
-
-	pageDecode.setTeletextPage(subPage);
-	pageRender.setDecoder(&pageDecode);
-	pageRender.setRenderMode(m_pageRender.renderMode());
-	pageRender.setShowControlCodes(m_pageRender.showControlCodes());
-	pageRender.setReveal(m_pageRender.reveal());
-	pageDecode.decodePage();
-	pageRender.renderPage(true);
-
-	const QImage pageImage = pageRender.image(0)->convertToFormat(QImage::Format_ARGB32);
-
-	const int leftCols = pageDecode.leftSidePanelColumns();
-	const int rightCols = pageDecode.rightSidePanelColumns();
-	const int width = 480 + leftCols*12 + rightCols*12;
-
-	QImage interImage(width, 250, QImage::Format_ARGB32);
-	interImage.fill(Qt::transparent);
-	QPainter painter(&interImage);
-	painter.setRenderHint(QPainter::SmoothPixmapTransform, false);
-
-	painter.drawImage(leftCols*12, 0, pageImage, 0, 0, 480, 250);
-	if (leftCols)
-		painter.drawImage(0, 0, pageImage, 864-leftCols*12, 0, leftCols*12, 250);
-	if (rightCols)
-		painter.drawImage(480+leftCols*12, 0, pageImage, 480, 0, rightCols*12, 250);
-	painter.end();
-
-	const Qt::TransformationMode upscaleMode = smoothUpscale ? Qt::SmoothTransformation : Qt::FastTransformation;
-
-	QImage result;
-	if (applyViewAspectRatio && viewAspectRatio == 3)
-		result = interImage.scaled(interImage.width(), interImage.height()*2, Qt::IgnoreAspectRatio, Qt::FastTransformation);
-	else if (applyViewAspectRatio) {
-		const QImage doubleHeightImage = interImage.scaled(interImage.width(), interImage.height()*2, Qt::IgnoreAspectRatio, Qt::FastTransformation);
-		result = doubleHeightImage.scaled((int)((float)doubleHeightImage.width() * aspectRatioHorizontalScaling[viewAspectRatio] * 2), doubleHeightImage.height(), Qt::IgnoreAspectRatio, upscaleMode);
-	} else
-		result = interImage.scaled(interImage.width(), interImage.height()*2, Qt::IgnoreAspectRatio, Qt::FastTransformation);
-
-	if (scaleFactor > 1)
-		result = result.scaled(result.width()*scaleFactor, result.height()*scaleFactor, Qt::IgnoreAspectRatio, upscaleMode);
-
-	return result;
-}
-
 void TeletextWidget::updateFlashTimer(int newFlashTimer)
 {
 	m_flashTiming = newFlashTimer;

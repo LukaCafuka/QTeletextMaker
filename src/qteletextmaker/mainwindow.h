@@ -120,6 +120,7 @@ private:
 	void openFile(const QString &fileName);
 	void loadFile(const QString &fileName);
 	void extractImages(QImage sceneImage[], bool smooth = false, bool flashExtract = false);
+	bool quickPNGExport(const QString &fileName);
 	void prependToRecentFiles(const QString &fileName);
 	bool saveFile(const QString &fileName);
 	void setCurrentFile(const QString &fileName);

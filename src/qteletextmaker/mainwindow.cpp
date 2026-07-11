@@ -255,6 +255,35 @@ void MainWindow::extractImages(QImage sceneImage[], bool smooth, bool flashExtra
 		}
 }
 
+bool MainWindow::quickPNGExport(const QString &fileName)
+{
+	const TeletextPageRender::RenderMode savedMode = m_textWidget->pageRender()->renderMode();
+
+	m_textScene->hideGUIElements(true);
+	m_textScene->setRenderMode(TeletextPageRender::RenderNormal);
+
+	QImage interImage(m_textScene->sceneRect().size().toSize(), QImage::Format_RGB32);
+
+	m_textWidget->pauseFlash(0);
+	QPainter interPainter(&interImage);
+	m_textScene->render(&interPainter);
+	interPainter.end();
+
+	m_textScene->hideGUIElements(false);
+	m_textScene->setRenderMode(savedMode);
+	m_textWidget->resumeFlash();
+
+	QImage scaledImage;
+	if (m_viewAspectRatio == 3)
+		scaledImage = interImage.scaled(interImage.width(), interImage.height()*2, Qt::IgnoreAspectRatio, Qt::FastTransformation);
+	else {
+		const QImage doubleHeightImage = interImage.scaled(interImage.width(), interImage.height()*2, Qt::IgnoreAspectRatio, Qt::FastTransformation);
+		scaledImage = doubleHeightImage.scaled((int)((float)doubleHeightImage.width() * aspectRatioHorizontalScaling[m_viewAspectRatio] * 2), doubleHeightImage.height(), Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+	}
+
+	return scaledImage.save(fileName, "PNG");
+}
+
 void MainWindow::exportImage()
 {
 	QString exportFileName, selectedFilter, gifFilter;
@@ -294,9 +323,7 @@ void MainWindow::exportImage()
 	}
 
 	if (suffix == "png") {
-		const int exportScale = qMax(2, 1 + m_viewZoom / 2);
-		const QImage image = m_textWidget->renderSubPageImage(m_textWidget->document()->currentSubPage(), exportScale, m_viewAspectRatio, true, m_viewSmoothTransform);
-		if (image.save(exportFileName, "PNG"))
+		if (quickPNGExport(exportFileName))
 			m_exportImageFileName = exportFileName;
 		else
 			QMessageBox::warning(this, QApplication::applicationDisplayName(), tr("Cannot export image %1.").arg(QDir::toNativeSeparators(exportFileName)));
@@ -410,9 +437,12 @@ void MainWindow::exportAllPagesAsPng()
 				fileName.append(QString("_s%1").arg(subPageCode, 4, 16, QChar('0')).toUpper());
 			fileName.append(".png");
 
-			const int exportScale = qMax(2, 1 + m_viewZoom / 2);
-			const QImage image = m_textWidget->renderSubPageImage(pageEntry.subPages.at(subPageIndex), exportScale, m_viewAspectRatio, true, m_viewSmoothTransform);
-			if (image.save(QDir(exportDir).filePath(fileName), "PNG"))
+			document->selectPageIndex(pageIndex, true);
+			document->selectSubPageIndex(subPageIndex, true);
+			m_textWidget->repaint();
+			QApplication::processEvents();
+
+			if (quickPNGExport(QDir(exportDir).filePath(fileName)))
 				exported++;
 			else
 				failed++;
